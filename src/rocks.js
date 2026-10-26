@@ -98,5 +98,13 @@ export async function createRockField(group,renderer,landscape,fallbackMaterial)
     return y;
   }
   update(0,0);
-  return {update,groundAt,surfaceAt,colliders,records,templates};
+  function sampleMesh(radius=.065,variant=0){
+    const group=new THREE.Group();
+    for(const part of templates[variant%templates.length].parts){const m=new THREE.Mesh(part.geometry,part.material);m.castShadow=m.receiveShadow=true;group.add(m);}
+    const bounds=new THREE.Box3().setFromObject(group),center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
+    const scale=radius*2/Math.max(size.x,size.y,size.z);
+    for(const m of group.children){m.scale.setScalar(scale);m.position.copy(center).multiplyScalar(-scale);}
+    return group;
+  }
+  return {update,groundAt,surfaceAt,colliders,records,templates,sampleMesh};
 }

@@ -49,3 +49,13 @@ The local surface map is separate from the historical geographic atlas because t
 - [Wuhan government](https://english.wuhan.gov.cn/H_1/NWP/202406/t20240606_2412383.shtml): Chang'e 6's 200 by 300 mm basalt-based flag and its distinction from earlier painted insignia.
 
 The game represents only these sourced deployments as local flag exhibits. It does not infer that every lunar mission planted a pole-mounted flag. The mission-level globe pins are historical site locations, not surveyed flag-pole coordinates.
+
+## Sampling, gait and loose-stone dynamics
+
+- [NASA: Spacewalking tools](https://www.nasa.gov/suits-and-rovers/spacewalking-tools/) documents scoops for soil collection, tongs for individual rocks and extension handles for reach. The requested compact pocket shovel and gloved crouch pickup are explicitly game adaptations. The animation draws the tool, reaches down, scoops, raises the blade, opens the bag, pours and returns the tool.
+- [NASA: Lunar atmosphere](https://science.nasa.gov/moon/lunar-atmosphere/) describes the extremely sparse, non-collisional lunar exosphere. The stone simulation omits aerodynamic drag; impact dust follows ballistic arcs instead of drifting like terrestrial smoke.
+- [LASP: Apollo 16 dust analysis](https://lasp.colorado.edu/2012/05/07/10143/) describes the ballistic paths of rover dust in Apollo footage. The game uses the existing constant 1.62 m/s² gravity for samples and particles.
+
+Gait remains procedural. Stance feet stay in world space while swing feet use a smooth lift and return. Arm swing opposes the corresponding leg, the torso responds to distance travelled, and pelvis height adapts before knee IK is solved. Sampling explicitly plants the feet, lowers the pelvis and pivots the torso about the hips; two-bone arm IK targets the specimen or tool path. Small finger meshes close around the grip.
+
+The expedition host runs sample physics at 120 Hz. Flight substeps limit travel to less than half a sample radius, including checks against upright player volumes. A host-owned reservation prevents duplicate pickup; inventory is changed at grasp, deposit or release, not at the keypress. Projectiles bounce with restitution 0.24 against terrain and lose tangential speed on contact; these coefficients and the 6.5 m/s throw speed are game tuning, not measured lunar-soil material constants. Surface slopes determine bounce normals. Conservative body bounds simplify rock/rover/structure contact. Hits cause visible recoil without a damage model. Samples are ephemeral expedition state, with no persistent backend.

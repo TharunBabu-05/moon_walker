@@ -1,6 +1,6 @@
 import {reconcileContacts} from './contacts.js';
 export const MAX_CREW=8;
-const PREFIX='selene-expedition-5-';
+const PREFIX='selene-expedition-6-';
 const numeric=['x','y','z','vx','vy','vz','yaw','speed','distance'];
 
 export function sanitizeState(value){
@@ -33,7 +33,7 @@ async function loadPeer(){
   return library;
 }
 
-export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,onCorrection=()=>{}}){
+export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,onCorrection=()=>{},onSampleRequest=()=>{},onSampleWorld=()=>{},onSampleReset=()=>{}}){
   let peer=null,host=false,code='',name='Explorer',phase='solo',message='Explore solo, or invite a crew.',lastSend=0,generation=0;
   const links=new Map(),members=new Map(),pending=new Map();let connectionTimer,lastBroadcast=-Infinity,sequence=0,ack=0,correctionSerial=0,contactCount=0;
   const notify=()=>onChange({phase,host,code,name,message,count:phase==='connected'?members.size+1:1,max:MAX_CREW});
@@ -44,7 +44,7 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
     generation++;clearTimeout(connectionTimer);
     if(host)broadcast({type:'ended'});
     for(const link of links.values())link.close();links.clear();peer?.destroy();peer=null;
-    members.clear();pending.clear();sequence=ack=correctionSerial=contactCount=0;host=false;code='';phase='solo';message='Explore solo, or invite a crew.';roster();notify();
+    members.clear();pending.clear();sequence=ack=correctionSerial=contactCount=0;host=false;code='';phase='solo';message='Explore solo, or invite a crew.';onSampleReset();roster();notify();
     if(showNotice)onNotice('You left the expedition. Continue exploring solo.');
   }
   function fail(text){disconnect();phase='error';message=text;notify();}
@@ -78,7 +78,7 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
         if(session!==generation)return;
         if(host){clearTimeout(connectionTimer);phase='connected';message='Expedition open. Copy the invite link for your friends.';notify();}
         else if([...links.values()].some(link=>link.open)){message='Connected. Your crew shares this landing site.';notify();}
-        else attach(peer.connect(PREFIX+code,{reliable:true,serialization:'json',metadata:{name,version:5}}));
+        else attach(peer.connect(PREFIX+code,{reliable:true,serialization:'json',metadata:{name,version:6}}));
       });
       peer.on('connection',link=>{
         if(!host||session!==generation){link.close();return;}
@@ -99,7 +99,7 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
         link.on('open',()=>{
           if(session!==generation){link.close();return;}
           if(host){
-            if(members.size>=MAX_CREW-1||link.metadata?.version!==5){send(link,{type:'rejected',message:'This expedition is full or uses a different game version.'});setTimeout(()=>link.close(),100);return;}
+            if(members.size>=MAX_CREW-1||link.metadata?.version!==6){send(link,{type:'rejected',message:'This expedition is full or uses a different game version.'});setTimeout(()=>link.close(),100);return;}
             links.set(link.peer,link);members.set(link.peer,{name:cleanName(link.metadata?.name),state:null});
             const p=getState(),slot=members.size;
             send(link,{type:'welcome',spawn:{x:p.x+slot*6,z:p.z+7}});
@@ -112,13 +112,19 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
         link.on('data',data=>{
           if(session!==generation||!data||typeof data!=='object')return;
           if(host){
+            if(data.type==='sample-request'&&members.has(link.peer)){
+              const member=members.get(link.peer),now=performance.now();if(now-(member.lastSampleRequest||0)<250)return;member.lastSampleRequest=now;
+              const error=onSampleRequest(link.peer,member.state,data.request);if(error)send(link,{type:'sample-notice',message:error});return;
+            }
             if(!members.has(link.peer)||data.type!=='state')return;
             const state=sanitizeState(data.state);if(!state)return;
             const member=members.get(link.peer);if(!Number.isFinite(data.stamp)||!Number.isSafeInteger(data.seq)||data.seq<=(member.seq||0))return;
             const correction=pending.get(link.peer);
             if(correction&&state.ack<correction.serial&&performance.now()-correction.since<1500)return;
             pending.delete(link.peer);Object.assign(member,{state,stamp:data.stamp,seq:data.seq});publishRoster();
-          }else if(data.type==='welcome'&&Number.isFinite(data.spawn?.x)&&Number.isFinite(data.spawn?.z))onSpawn(data.spawn);
+          }else if(data.type==='sample-world')onSampleWorld(data.world);
+          else if(data.type==='sample-notice')onNotice(String(data.message).slice(0,160));
+          else if(data.type==='welcome'&&Number.isFinite(data.spawn?.x)&&Number.isFinite(data.spawn?.z))onSpawn(data.spawn);
           else if(data.type==='world'&&Array.isArray(data.members)){
             members.clear();
             for(const entry of data.members.slice(0,MAX_CREW)){
@@ -145,6 +151,18 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
   }
   notify();
   return {
+    identity:()=>phase==='connected'?peer.id:'solo',
+    authority:()=>host||phase!=='connected',
+    sampleEntries:()=>[{id:phase==='connected'?peer.id:'solo',state:getState()},...[...members].filter(([,m])=>m.state).map(([id,m])=>({id,state:m.state}))],
+    requestSample(request){if(host||phase!=='connected'){const error=onSampleRequest(phase==='connected'?peer.id:'solo',getState(),request);if(error)onNotice(error);}else for(const link of links.values()){send(link,{type:'state',...payload()});send(link,{type:'sample-request',request});}},
+    publishSamples(world){
+      if(!host||phase!=='connected')return;
+      for(const [id,link] of links){
+        const state=members.get(id)?.state;if(!state)continue;
+        const nearby=world.stones.filter(r=>Math.hypot(r.x-state.x,r.z-state.z)<145);
+        send(link,{type:'sample-world',world:{...world,stones:nearby,events:world.events.slice(-16)}});
+      }
+    },
     host:name=>open('host','',name),join:(room,name)=>open('join',room,name),leave:()=>disconnect(true),
     update(now){if(phase!=='connected'||now-lastSend<.05)return;lastSend=now;if(host)publishRoster();else {const data={type:'state',...payload()};for(const link of links.values())send(link,data);}},
     snapshot:()=>({phase,host,code,contactCount,sendRate:20,count:phase==='connected'?members.size+1:1,members:[...members].map(([id,m])=>({id,name:m.name,state:m.state}))}),

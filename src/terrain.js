@@ -146,10 +146,12 @@ export async function buildTerrain(scene,renderer,landscape){
   const dustCount=320,dustPos=new Float32Array(dustCount*3),dustColors=new Float32Array(dustCount*3),dustLives=new Float32Array(dustCount),dustVel=new Float32Array(dustCount*3);
   dustPos.fill(-10000);const dg=new THREE.BufferGeometry();dg.setAttribute('position',new THREE.BufferAttribute(dustPos,3));dg.setAttribute('color',new THREE.BufferAttribute(dustColors,3));
   const dust=new THREE.Points(dg,new THREE.PointsMaterial({size:.022,color:0x9c9da0,vertexColors:true,transparent:true,opacity:.65,depthWrite:false}));dust.frustumCulled=false;group.add(dust);let dustIndex=0;
-  function footstep(position,yaw,strength=1,wheel=false){
+  function footstep(position,yaw,strength=1,wheel=false,dustOnly=false){
+    if(!dustOnly){
     dummy.position.set(position.x,rockField.groundAt(position.x,position.z)+.012,position.z);
     const dx=(groundAt(position.x+.12,position.z)-groundAt(position.x-.12,position.z))/.24,dz=(groundAt(position.x,position.z+.12)-groundAt(position.x,position.z-.12))/.24;
     dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(-dx,1,-dz).normalize());dummy.rotateY(yaw);dummy.scale.set(wheel?.86:1,1,wheel?1.5:1);dummy.updateMatrix();footprints.setMatrixAt(printIndex%500,dummy.matrix);printIndex++;footprints.count=Math.min(500,printIndex);footprints.instanceMatrix.needsUpdate=true;
+    }
     for(let k=0;k<12;k++){
       const i=dustIndex++%dustCount,j=i*3;dustPos[j]=position.x+(Math.random()-.5)*.12;dustPos[j+1]=position.y+.03;dustPos[j+2]=position.z+(Math.random()-.5)*.15;
       dustVel[j]=(Math.random()-.5)*.55*strength;dustVel[j+1]=.18+Math.random()*.4*strength;dustVel[j+2]=(Math.random()-.5)*.55*strength;dustLives[i]=1;
@@ -163,5 +165,5 @@ export async function buildTerrain(scene,renderer,landscape){
     }
     dg.attributes.position.needsUpdate=true;dg.attributes.color.needsUpdate=true;
   }
-  return {group,groundAt:rockField.groundAt,rockTopAt:rockField.surfaceAt,colliders:rockField.colliders,rocks:rockField.records,update(x,z){update(x,z);rockField.update(x,z);},footstep,wheelTrack:(p,yaw)=>footstep(p,yaw,.5,true),updateDust};
+  return {group,sampleMesh:rockField.sampleMesh,impactDust:p=>footstep(p,0,.8,false,true),groundAt:rockField.groundAt,rockTopAt:rockField.surfaceAt,colliders:rockField.colliders,rocks:rockField.records,update(x,z){update(x,z);rockField.update(x,z);},footstep,wheelTrack:(p,yaw)=>footstep(p,yaw,.5,true),updateDust};
 }

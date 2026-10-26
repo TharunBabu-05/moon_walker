@@ -40,7 +40,25 @@ GitHub Pages serves the game files. PeerJS Cloud provides connection signaling, 
 - In the atlas, choose **Visit research station** to move to the concept outpost. Walk up the ramp; the two proximity airlocks open automatically. The white square on the local map marks the station.
 - **V** changes views. **H** hides the interface. **Esc** releases mouse look. The **?** button opens the field guide.
 
-## About the surface
+## Collect lunar samples
+
+Stop on foot and face a loose, hand-sized stone within one metre. A gold ring shows the stone you can reach. The new loose specimens use the same photographed rock materials as the larger formations; fixed boulders and decorative gravel cannot be collected.
+
+| Key | Action |
+| --- | --- |
+| **F** | Crouch, pick up a small stone in the right glove, and stand |
+| **B** | Put the held stone in the sample bag |
+| **R** | Take the last stored stone back out |
+| **T** | Wind up and throw toward the view; look up or down to change elevation |
+| **G** | Draw the pocket shovel, scoop regolith, pour it into the soil bag and stow the tool |
+
+The **Field sampling** panel also provides touch buttons. Each bag holds 12 samples. Keep both boots planted while sampling; bag a held stone before boarding the buggy. The first-person camera follows the crouch and looks toward the work. Walking uses planted stance feet, terrain-aware knee bends, toe clearance and opposite-arm swing driven by foot placement.
+
+Thrown stones use 1.62 m/s² gravity, spin, substepped collision, terrain-normal bounce, friction and ballistic impact dust. They collide with terrain, conservative boulder/structure/buggy bounds and other explorers; suit impacts trigger a short recoil animation. This is an approximate game simulation, with spherical stone bounds and procedural character poses, not motion capture, full rigid-body dynamics or a suit-injury simulation. The compact pocket shovel and hand pickup are gameplay adaptations, not a reconstruction of an Apollo sampling procedure.
+
+The host owns reservations, inventory, throws and hit detection. Guests send action requests; nearby stones and action progress are synchronized at 10 Hz and moving stones are interpolated between updates. Two people cannot claim the same stone. Joining or leaving an expedition starts a fresh sample session; bags are not saved across reloads. A departing explorer's held/stored stones return to the ground. Uncollected distant specimens are recycled to bound the active field to 240 objects. Everyone must refresh to **expedition protocol 6** and open a new room after updating.
+
+## Surface detail
 
 The global lunar body uses NASA Scientific Visualization Studio's LRO Wide Angle Camera natural-colour map and Lunar Orbiter Laser Altimeter elevation product. The walkable highlands are a generated landscape with nested half-metre terrain detail, irregular impact craters, desaturated ground materials, close gravel, and tread marks.
 
