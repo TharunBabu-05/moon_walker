@@ -2,11 +2,14 @@ import * as THREE from 'three';
 import { createLandscape, buildTerrain } from './terrain.js';
 import { createAstronaut } from './astronaut.js';
 import { createSurfaceSky, createUniverse, MOON_RADIUS, EARTH_DISTANCE } from './universe.js';
-import { createPlayer, stepPlayer, FIXED_STEP, clamp, damp } from './physics.js';
+import { createPlayer, stepPlayer, FIXED_STEP, clamp, damp, angleDelta } from './physics.js';
+import {createRoverState,stepRover,resolveObstacles} from './world.js';
+import {createRover} from './rover.js';
+import {createExpedition} from './multiplayer.js';
 
 const $=id=>document.getElementById(id);
 const canvas=$('scene');
-const failure=error=>{console.error(error);$('error').hidden=false;$('error-message').textContent='Please open this project through localhost. '+(error.message||'WebGL could not start.');};
+const failure=error=>{console.error(error);$('error').hidden=false;$('error-message').textContent=(error?.message||'WebGL could not start.')+' Reload the page to try again.';};
 window.addEventListener('unhandledrejection',event=>failure(event.reason));
 try { await start(); } catch(error) {failure(error);}
 
@@ -14,19 +17,21 @@ async function start(){
   const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.65));
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-  renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
+  renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
   const scene=new THREE.Scene();scene.background=new THREE.Color(0x010205);
   const camera=new THREE.PerspectiveCamera(63,innerWidth/innerHeight,.035,40000);
   const sky=createSurfaceSky(scene);
   const sun=new THREE.DirectionalLight(0xfffaf3,3.25);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-28;sun.shadow.camera.right=28;sun.shadow.camera.top=28;sun.shadow.camera.bottom=-28;sun.shadow.camera.near=1;sun.shadow.camera.far=500;sun.shadow.bias=-.00012;sun.shadow.normalBias=.012;sun.shadow.radius=1.2;scene.add(sun,sun.target);
-  scene.add(new THREE.HemisphereLight(0xb7c3d1,0x62636a,.21));
+  scene.add(new THREE.HemisphereLight(0xc4c5c7,0x777778,.28));
   const groundBounce=new THREE.DirectionalLight(0xc1c2c4,.13);groundBounce.position.set(-50,5,30);scene.add(groundBounce);
   const universePromise=createUniverse(renderer,text=>$('load-status').textContent=text);
   await new Promise(resolve=>requestAnimationFrame(resolve));
-  const landscape=createLandscape(),terrain=buildTerrain(scene,renderer,landscape);
-  const player=createPlayer(landscape.groundAt);
+  const landscape=createLandscape();$('load-status').textContent='Preparing detailed rock models and surface materials…';
+  const terrain=await buildTerrain(scene,renderer,landscape);
+  const player=createPlayer(terrain.groundAt),roverState=createRoverState(landscape.groundAt),rover=createRover(scene,landscape.groundAt,roverState);
+  let riding=false;
   let footstepCount=0;
-  const astronaut=createAstronaut(scene,landscape.groundAt,(position,yaw,strength)=>{footstepCount++;terrain.footstep(position,yaw,strength);});
+  const astronaut=createAstronaut(scene,terrain.groundAt,(position,yaw,strength)=>{footstepCount++;terrain.footstep(position,yaw,strength);});
   astronaut.update(player,0);astronaut.root.visible=false;
 
   // An instrument tripod provides a familiar sense of scale near the crater rim.
@@ -62,8 +67,93 @@ async function start(){
     for(let y=60;y<240;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(360,y);ctx.stroke();}
     ctx.save();ctx.translate(180,120);ctx.rotate(-(mode==='first'?yaw:followYaw));ctx.fillStyle='#bcded7';ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(5,6);ctx.lineTo(-5,6);ctx.closePath();ctx.fill();ctx.restore();
     ctx.strokeStyle='rgba(188,222,215,.35)';ctx.beginPath();ctx.arc(180,120,15,0,Math.PI*2);ctx.stroke();
+    const dot=(x,z,color,size)=>{const px=180+(x-player.x)*360/500,pz=120+(z-player.z)*240/500;if(px<5||px>355||pz<5||pz>235)return;ctx.fillStyle=color;ctx.fillRect(px-size/2,pz-size/2,size,size);};
+    dot(roverState.x,roverState.z,'#d7b678',7);for(const remote of remotes.values())dot(remote.current.x,remote.current.z,'#b8e4d5',5);
   }
   function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>$('toast').classList.remove('visible'),3500);}
+  const modalOpen=()=>$('help').open||$('crew-dialog').open;
+  const remotes=new Map();let rosterSignature='';
+  const localState=()=>({...player,riding,rover:{...roverState}});
+  const expedition=createExpedition({
+    getState:localState,
+    onChange(state){
+      $('network-status').textContent=state.message;$('network-status').dataset.phase=state.phase;
+      $('crew-count').textContent=state.count;$('crew-setup').hidden=state.phase==='connected';
+      $('crew-connected').hidden=state.phase!=='connected';$('explorer-name').disabled=state.phase==='connecting'||state.phase==='connected';
+      $('host-expedition').disabled=$('join-expedition').disabled=state.phase==='connecting';
+      $('crew-presence').hidden=state.phase!=='connected';$('presence-text').textContent=`${state.count} / ${state.max} EXPLORERS · ${state.host?'HOSTING':'CONNECTED'}`;
+      if(state.phase==='connected'){
+        $('active-code').textContent=state.code;$('invite-link').value=expedition.invite();
+        const signature=JSON.stringify([state.name,...[...remotes.values()].map(r=>r.name)]);
+        if(signature!==rosterSignature){
+          rosterSignature=signature;const list=$('crew-list');list.replaceChildren();
+          for(const [name,tag] of [[state.name,'YOU'],...[...remotes.values()].map(r=>[r.name,'EXPLORER'])]){
+            const li=document.createElement('li'),label=document.createElement('span'),small=document.createElement('small');label.textContent=name;small.textContent=tag;li.append(label,small);list.append(li);
+          }
+        }
+      }
+    },
+    onRoster(members){
+      const ids=new Set(members.map(m=>m.id));
+      for(const [id,remote] of remotes)if(!ids.has(id)){
+        remote.astronaut.dispose();disposeObject(remote.rover.root);remote.label.material.map.dispose();remote.label.material.dispose();remote.label.removeFromParent();remotes.delete(id);
+      }
+      for(const member of members){
+        if(!member.state)continue;
+        let remote=remotes.get(member.id);
+        if(!remote){
+          const avatar=createAstronaut(scene,terrain.groundAt,()=>{});avatar.materials.glass.envMap=astronaut.materials.glass.envMap;avatar.materials.gold.envMap=astronaut.materials.gold.envMap;
+          const labelCanvas=document.createElement('canvas');labelCanvas.width=512;labelCanvas.height=64;const c=labelCanvas.getContext('2d');c.fillStyle='rgba(5,14,19,.75)';c.fillRect(0,0,512,64);c.fillStyle='#c5e1dc';c.font='25px monospace';c.textAlign='center';c.fillText(member.name.toUpperCase(),256,41);
+          const label=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(labelCanvas),transparent:true,depthTest:true}));label.scale.set(2.5,.3125,1);scene.add(label);
+          const rv=createRover(scene,landscape.groundAt,member.state.rover||roverState);
+          remote={name:member.name,astronaut:avatar,rover:rv,label,current:{...member.state},target:member.state};remotes.set(member.id,remote);
+        }
+        remote.target=member.state;
+      }
+    },
+    onSpawn(position){
+      const x=clamp(position.x,-10950,10950),z=clamp(position.z,-10950,10950);terrain.update(x,z);
+      riding=false;Object.assign(player,{x,z,y:terrain.groundAt(x,z),vx:0,vz:0,vy:0,speed:0,grounded:true});resolveObstacles(player,terrain.colliders);
+      Object.assign(roverState,createRoverState(landscape.groundAt,player.x+3,player.z+2));resolveObstacles(roverState,terrain.colliders,1.08);roverState.y=landscape.groundAt(roverState.x,roverState.z);
+      terrain.update(player.x,player.z);toast('You joined the crew. Look for their callsigns on the surface.');
+    },onNotice:toast
+  });
+  function disposeObject(root){
+    const geometries=new Set(),materials=new Set();root.traverse(m=>{if(m.geometry)geometries.add(m.geometry);if(m.material)materials.add(m.material);});
+    geometries.forEach(g=>g.dispose());materials.forEach(m=>{m.map?.dispose();m.dispose();});root.removeFromParent();
+  }
+  try{$('explorer-name').value=localStorage.getItem('selene-callsign')||'Explorer';}catch{$('explorer-name').value='Explorer';}
+  const invitedRoom=new URLSearchParams(location.search).get('room');if(invitedRoom)$('room-code').value=invitedRoom.slice(0,8);
+  function openCrew(){if(document.pointerLockElement)document.exitPointerLock();keys.clear();$('crew-dialog').showModal();}
+  $('crew-button').addEventListener('click',openCrew);$('close-crew').addEventListener('click',()=>$('crew-dialog').close());
+  const rememberName=()=>{const name=$('explorer-name').value;try{localStorage.setItem('selene-callsign',name);}catch{}return name;};
+  $('host-expedition').addEventListener('click',()=>expedition.host(rememberName()));
+  $('join-expedition').addEventListener('click',()=>expedition.join($('room-code').value,rememberName()));
+  $('leave-expedition').addEventListener('click',()=>expedition.leave());
+  $('copy-invite').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(expedition.invite());toast('Invite copied. Send it to your friends and keep this tab open.');}catch{$('invite-link').focus();$('invite-link').select();toast('Select and copy the invite link.');}});
+  window.addEventListener('beforeunload',()=>expedition.leave());
+  function controls(){
+    $('control-strip').innerHTML=mode==='orbit'?'<span><kbd>DRAG</kbd> Orbit</span><span><kbd>SCROLL</kbd> Zoom</span><span><kbd>1 / 2</kbd> Surface</span>':riding?'<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>E</kbd> Exit</span>':'<span><kbd>W A S D</kbd> Walk</span><span><kbd>SHIFT</kbd> Lope</span><span><kbd>SPACE</kbd> Jump</span><span><kbd>E</kbd> Buggy</span><span><kbd>V</kbd> View</span>';
+    $('touch-jump').textContent=riding?'BRAKE':'JUMP';
+  }
+  function toggleRover(){
+    if(!started||mode==='orbit')return;
+    if(riding){
+      if(roverState.speed>.7){toast('Hold Space to stop before stepping out.');return;}
+      const x=roverState.x+Math.cos(roverState.yaw)*1.95,z=roverState.z-Math.sin(roverState.yaw)*1.95;
+      Object.assign(player,{x,z,y:terrain.groundAt(x,z),vx:0,vz:0,vy:0,speed:0,grounded:true});resolveObstacles(player,terrain.colliders);player.y=terrain.groundAt(player.x,player.z);riding=false;toast('Back on foot. E to get back in.');
+    }else{
+      if(Math.hypot(player.x-roverState.x,player.z-roverState.z)>4.2){toast('Walk to your buggy, or use Locate my buggy.');return;}
+      riding=true;roverState.vx=roverState.vz=0;followYaw=yaw=roverState.yaw;targetFollowDistance=6.8;toast('W / S drive · A / D steer · Space brake · E exit');
+    }
+    keys.clear();jumpRequested=false;controls();
+  }
+  $('rover-action').addEventListener('click',toggleRover);
+  $('find-rover').addEventListener('click',()=>{
+    if(mode==='orbit')setMode('follow');
+    const bearing=Math.atan2(-(roverState.x-player.x),-(roverState.z-player.z));followYaw=yaw=bearing;pitch=-.12;followPitch=.24;
+    toast(`Your buggy is ${Math.round(Math.hypot(player.x-roverState.x,player.z-roverState.z))} m ahead. Walk toward it and press E.`);
+  });
   function requestLook(){
     if(mode!=='first'||!started||matchMedia('(pointer:coarse)').matches)return;
     try {const promise=canvas.requestPointerLock();if(promise?.catch)promise.catch(()=>{$('resume').hidden=false;});}catch{$('resume').hidden=false;}
@@ -76,21 +166,21 @@ async function start(){
     if(next==='follow'&&mode==='first')followYaw=yaw;
     if(next==='first')yaw=followYaw;
     mode=next;keys.clear();jumpRequested=false;player.vx=player.vz=0;
-    astronaut.root.visible=mode==='follow';
+    astronaut.root.visible=mode==='follow';$('rover-card').hidden=mode==='orbit';
     $('reticle').hidden=mode!=='first';$('resume').hidden=mode!=='first';$('mini-map').hidden=mode==='orbit';$('surface-note').hidden=mode==='orbit';$('orbit-tools').hidden=mode!=='orbit';
     document.querySelector('.touch-controls').hidden=mode==='orbit';
     document.querySelectorAll('[data-view]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===mode)));
     const index=['first','follow','orbit'].indexOf(mode);$('view-number').textContent=`0${index+1} / 03`;
     $('view-name').textContent=['ON THE SURFACE','ALONGSIDE THE EXPLORER','BEYOND THE HORIZON'][index];
     $('view-description').textContent=['Your eyes. Your footsteps.','Articulated motion. Lunar gravity.','Every crater. Every hemisphere.'][index];
-    $('control-strip').innerHTML=mode==='orbit'?'<span><kbd>DRAG</kbd> Orbit</span><span><kbd>SCROLL</kbd> Zoom</span><span><kbd>1 / 2</kbd> Surface</span><span><kbd>H</kbd> Hide UI</span>':'<span><kbd>W A S D</kbd> Walk</span><span><kbd>SHIFT</kbd> Lope</span><span><kbd>SPACE</kbd> Jump</span><span><kbd>V</kbd> View</span><span><kbd>H</kbd> Hide UI</span>';
+    controls();
     $('telemetry-title').textContent=mode==='orbit'?'ORBITAL TELEMETRY':'SURFACE TELEMETRY';
     $('metric-a-label').textContent=mode==='orbit'?'Camera altitude':'Ground speed';$('metric-b-label').textContent=mode==='orbit'?'Moon diameter':'Height above ground';$('metric-c-label').textContent=mode==='orbit'?'Reference frame':'Locomotion';
     $('earth-label').hidden=$('moon-label').hidden=true;
     if(mode==='orbit'){universe.preset('moon');toast('Scroll to zoom out. Earth + Moon frames both worlds.');}
     else if(mode==='follow')toast('Drag to orbit your astronaut. Space to jump.');
   }
-  $('begin').addEventListener('click',()=>{if(!ready)return;started=true;$('welcome').hidden=true;$('hud').hidden=false;$('views').hidden=false;canvas.focus();requestLook();});
+  $('begin').addEventListener('click',()=>{if(!ready)return;started=true;$('welcome').hidden=true;$('hud').hidden=false;$('views').hidden=false;canvas.focus();controls();if(invitedRoom)openCrew();else requestLook();});
   document.querySelector('.brand').addEventListener('click',event=>{event.preventDefault();if(started){if(mode!=='first')setMode('first');toast('1 First person · 2 Astronaut · 3 Orbit');}});
   document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>setMode(button.dataset.view)));
   $('resume').addEventListener('click',requestLook);
@@ -106,18 +196,18 @@ async function start(){
     $('quality').textContent=highQuality?'HIGH DETAIL':'BALANCED';
     toast(highQuality?'High detail rendering':'Balanced rendering for smoother movement');
   });
-  document.addEventListener('pointerlockchange',()=>{$('resume').hidden=!started||mode!=='first'||document.pointerLockElement===canvas;keys.clear();});
+  document.addEventListener('pointerlockchange',()=>{$('resume').hidden=!started||mode!=='first'||document.pointerLockElement===canvas;if(mode==='first'&&!document.pointerLockElement)keys.clear();});
   function moveLook(dx,dy){
     if(mode==='first'){yaw-=dx*.0025;pitch=clamp(pitch-dy*.0022,-1.38,1.28);}
     else if(mode==='follow'){followYaw-=dx*.004;followPitch=clamp(followPitch+dy*.0035,-.12,1.32);}
     else{universe.state.yaw-=dx*.004;universe.state.pitch=clamp(universe.state.pitch+dy*.004,-1.49,1.49);}
   }
   canvas.addEventListener('pointerdown',event=>{
-    if(!started||$('help').open)return;pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});canvas.setPointerCapture(event.pointerId);
+    if(!started||modalOpen())return;pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});canvas.setPointerCapture(event.pointerId);
     if(event.pointerType==='mouse'&&mode==='first'&&event.button===0)requestLook();
   });
   canvas.addEventListener('pointermove',event=>{
-    if(!started||$('help').open)return;
+    if(!started||modalOpen())return;
     if(document.pointerLockElement===canvas){moveLook(event.movementX,event.movementY);return;}
     const old=pointers.get(event.pointerId);if(!old)return;
     const dx=event.clientX-old.x,dy=event.clientY-old.y;pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
@@ -129,12 +219,13 @@ async function start(){
   canvas.addEventListener('contextmenu',event=>event.preventDefault());
   const movementKeys=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space'];
   document.addEventListener('keydown',event=>{
-    if(!started||$('help').open)return;
+    if(!started||modalOpen()||['INPUT','TEXTAREA'].includes(event.target.tagName))return;
     if(movementKeys.includes(event.code))event.preventDefault();
     if(event.repeat){keys.add(event.code);return;}
     if(event.code==='Digit1')setMode('first');if(event.code==='Digit2')setMode('follow');if(event.code==='Digit3')setMode('orbit');
     if(event.code==='KeyV'){const list=['first','follow','orbit'];setMode(list[(list.indexOf(mode)+1)%3]);}
     if(event.code==='KeyH'){hiddenUI=!hiddenUI;document.body.classList.toggle('ui-hidden',hiddenUI);}
+    if(event.code==='KeyE')toggleRover();
     if(event.code==='Space'&&mode!=='orbit')jumpRequested=true;
     keys.add(event.code);
   });
@@ -144,13 +235,14 @@ async function start(){
     button.addEventListener('pointerdown',event=>{event.preventDefault();keys.add(button.dataset.key);button.setPointerCapture(event.pointerId);});
     for(const type of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(type,()=>keys.delete(button.dataset.key));
   });
-  $('touch-jump').addEventListener('pointerdown',event=>{event.preventDefault();jumpRequested=true;});
+  $('touch-jump').addEventListener('pointerdown',event=>{event.preventDefault();if(riding){keys.add('Space');$('touch-jump').setPointerCapture(event.pointerId);}else jumpRequested=true;});
+  for(const type of ['pointerup','pointercancel','lostpointercapture'])$('touch-jump').addEventListener(type,()=>keys.delete('Space'));
   window.addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=universe.camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();universe.camera.updateProjectionMatrix();});
   canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();failure(new Error('The graphics context was interrupted. Reload to reconnect.'));});
 
   function updateCamera(dt){
     if(mode==='first'){
-      const bob=started&&player.grounded?Math.sin(player.distance*7)*Math.min(.018,player.speed*.012):0;
+      const bob=!riding&&started&&player.grounded?Math.sin(player.distance*7)*Math.min(.018,player.speed*.012):0;
       camera.position.set(player.x,player.y+1.76+bob,player.z);
       camera.rotation.order='YXZ';camera.rotation.set(pitch,yaw,0,'YXZ');
     } else {
@@ -160,6 +252,15 @@ async function start(){
       const target=new THREE.Vector3(player.x,player.y+1.18,player.z);
       // Keep the orbit camera above ridges along the entire sightline.
       for(let i=1;i<=12;i++){const t=i/12,x=THREE.MathUtils.lerp(target.x,desired.x,t),z=THREE.MathUtils.lerp(target.z,desired.z,t),lineY=THREE.MathUtils.lerp(target.y,desired.y,t),floor=landscape.groundAt(x,z)+.25;if(lineY<floor)desired.y+=(floor-lineY)/t;}
+      // Prevent the camera from entering nearby boulders when orbiting the player.
+      const sight=desired.clone().sub(target),length=sight.length(),ray=new THREE.Raycaster(target,sight.normalize(),0,length);
+      let clearDistance=length;
+      for(const r of terrain.rocks){
+        if(Math.hypot(r.x-player.x,r.z-player.z)>length+3||r.radius<.2)continue;
+        const bounds=new THREE.Box3(new THREE.Vector3(r.x-r.radius,r.bottom,r.z-r.radius),new THREE.Vector3(r.x+r.radius,r.top,r.z+r.radius));
+        const hit=ray.ray.intersectBox(bounds,new THREE.Vector3());if(hit)clearDistance=Math.min(clearDistance,Math.max(1.1,hit.distanceTo(target)-.25));
+      }
+      if(clearDistance<length)desired.copy(target).addScaledVector(sight,clearDistance);
       camera.position.copy(desired);camera.lookAt(target);
     }
     sky.update(camera);
@@ -177,11 +278,15 @@ async function start(){
       $('metric-a').innerHTML=(universe.camera.position.distanceTo(universe.moon.position)-MOON_RADIUS).toLocaleString('en',{maximumFractionDigits:0})+' <small>km</small>';
       $('metric-b').innerHTML='3,474.8 <small>km</small>';$('metric-c').textContent=universe.state.distance>90000?'EARTH–MOON':'MOON';$('coordinates').textContent='LRO / WAC + LOLA';
     }else{
-      const clearance=Math.max(0,player.y-landscape.groundAt(player.x,player.z));
+      const clearance=Math.max(0,player.y-terrain.groundAt(player.x,player.z));
       $('metric-a').innerHTML=player.speed.toFixed(1)+' <small>m/s</small>';$('metric-b').innerHTML=clearance.toFixed(2)+' <small>m</small>';
-      $('metric-c').textContent=!player.grounded?(player.vy>0?'ASCENDING':'DESCENDING'):player.speed>.1?(player.speed>1.65?'LOPING':'WALKING'):'STANDING';
+      $('metric-c').textContent=riding?(roverState.grounded?'DRIVING / LRV':'LRV / AIRBORNE'):!player.grounded?(player.vy>0?'ASCENDING':'DESCENDING'):player.speed>.1?(player.speed>1.65?'LOPING':'WALKING'):'STANDING';
       $('coordinates').textContent=`${Math.abs(player.x).toFixed(1)} ${player.x>=0?'E':'W'}  /  ${Math.abs(player.z).toFixed(1)} ${player.z<=0?'N':'S'}  m`;
-      $('surface-state').textContent=player.grounded?'CONTACT / REGOLITH':'FREE FLIGHT / 1.62 m/s²';
+      $('surface-state').textContent=riding?'LUNAR ROVING VEHICLE / ELECTRIC DRIVE':player.grounded?'CONTACT / REGOLITH':'FREE FLIGHT / 1.62 m/s²';
+      const roverDistance=Math.hypot(player.x-roverState.x,player.z-roverState.z);
+      $('rover-status').textContent=riding?'YOU ARE AT THE WHEEL':`BUGGY · ${roverDistance.toFixed(0)} M AWAY`;
+      $('rover-hint').textContent=riding?'W / S drive. A / D steer. Space brakes.':roverDistance<4.2?'Your buggy is within reach. Press E to drive.':'The gold square on your map marks your buggy.';
+      $('rover-action').innerHTML=riding?'Exit buggy <kbd>E</kbd>':'Enter buggy <kbd>E</kbd>';$('rover-action').disabled=!riding&&roverDistance>=4.2;$('find-rover').hidden=riding;
       const heading=((-((mode==='first'?yaw:followYaw)*180/Math.PI)%360)+360)%360;$('heading').textContent=String(Math.round(heading)%360).padStart(3,'0')+'°';drawMap();
     }
   }
@@ -194,23 +299,56 @@ async function start(){
     requestAnimationFrame(animate);
     const dt=Math.min(clock.getDelta(),.08);if(document.hidden)return;
     elapsed+=dt;frames++;fpsTime+=dt;if(fpsTime>=1){fps=frames/fpsTime;frames=0;fpsTime=0;}
-    if(started&&mode!=='orbit'&&!$('help').open){
+    if(started&&mode!=='orbit'&&!modalOpen()){
       const inputX=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0),inputZ=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);
       const angle=mode==='first'?yaw:followYaw,fast=keys.has('ShiftLeft')||keys.has('ShiftRight');
       const input={x:Math.cos(angle)*inputX-Math.sin(angle)*inputZ,z:-Math.sin(angle)*inputX-Math.cos(angle)*inputZ,fast,jump:jumpRequested};
       accumulator=Math.min(accumulator+dt,.16);
       while(accumulator>=FIXED_STEP){
-        // A low, ballistic lope at higher speed; no floating body animation.
-        if(fast&&player.speed>1.9&&player.grounded&&elapsed-lastBound>.85&&!input.jump){player.vy=.60;player.grounded=false;lastBound=elapsed;}
-        stepPlayer(player,input,FIXED_STEP,landscape.groundAt);input.jump=false;jumpRequested=false;accumulator-=FIXED_STEP;
+        if(riding){
+          const oldYaw=roverState.yaw,oldX=player.x,oldZ=player.z;
+          stepRover(roverState,{throttle:inputZ,steer:-inputX,brake:keys.has('Space'),fast},FIXED_STEP,landscape.groundAt,terrain.colliders);
+          const turn=angleDelta(oldYaw,roverState.yaw);yaw+=turn;followYaw+=turn;
+          Object.assign(player,{x:roverState.x-Math.cos(roverState.yaw)*.39,z:roverState.z+Math.sin(roverState.yaw)*.39,y:roverState.y,yaw:roverState.yaw,vx:roverState.vx,vz:roverState.vz,vy:roverState.vy,speed:roverState.speed,grounded:roverState.grounded,landed:false});
+          player.distance+=Math.hypot(player.x-oldX,player.z-oldZ);
+        }else{
+          const oldX=player.x,oldZ=player.z,oldDistance=player.distance;
+          if(fast&&player.speed>1.9&&player.grounded&&elapsed-lastBound>.85&&!input.jump){player.vy=.60;player.grounded=false;lastBound=elapsed;}
+          stepPlayer(player,input,FIXED_STEP,terrain.groundAt);resolveObstacles(player,terrain.colliders,.32,terrain.rockTopAt);
+          resolveObstacles(player,[{x:roverState.x,z:roverState.z,radius:1.1,bottom:roverState.y,top:roverState.y+1.2}]);
+          player.speed=Math.hypot(player.vx,player.vz);if(player.grounded)player.y=terrain.groundAt(player.x,player.z);
+          player.distance=oldDistance+Math.hypot(player.x-oldX,player.z-oldZ);
+        }
+        input.jump=false;jumpRequested=false;accumulator-=FIXED_STEP;
       }
-      terrain.update(player.x,player.z);astronaut.update(player,dt,pitch);terrain.updateDust(dt);
+      terrain.update(player.x,player.z);if(riding)astronaut.updateSeated({...player,rover:roverState},dt);else astronaut.update(player,dt,pitch);
+      rover.update(roverState,dt);
+      if(riding&&roverState.speed>.5&&roverState.grounded&&frames%8===0){
+        for(const side of [-1,1]){
+          const x=roverState.x+Math.cos(roverState.yaw)*side+Math.sin(roverState.yaw),z=roverState.z-Math.sin(roverState.yaw)*side+Math.cos(roverState.yaw);
+          terrain.wheelTrack({x,y:landscape.groundAt(x,z),z},roverState.yaw);
+        }
+      }
+    }
+    terrain.updateDust(dt);expedition.update(elapsed);
+    for(const remote of remotes.values()){
+      const p=remote.current,t=remote.target;
+      const snap=Math.hypot(p.x-t.x,p.z-t.z)>12;
+      for(const key of ['x','y','z','vx','vz','vy','speed','distance'])p[key]=snap?t[key]:damp(p[key],t[key],13,dt);
+      p.yaw+=angleDelta(p.yaw,t.yaw)*(1-Math.exp(-dt*13));p.grounded=t.grounded;p.riding=t.riding;
+      remote.astronaut.root.visible=started&&Math.hypot(p.x-player.x,p.z-player.z)<300;
+      if(p.riding)remote.astronaut.updateSeated({...p,rover:t.rover},dt);else remote.astronaut.update(p,dt);
+      remote.label.visible=remote.astronaut.root.visible;remote.label.position.set(p.x,p.y+2.48,p.z);
+      if(t.rover){
+        remote.rover.root.visible=started&&Math.hypot(t.rover.x-player.x,t.rover.z-player.z)<450;
+        remote.rover.update(t.rover,dt);
+      }else remote.rover.root.visible=false;
     }
     if(mode==='orbit'){universe.update(dt);updateLabels();renderer.render(universe.scene,universe.camera);}
     else{updateCamera(dt);renderer.render(scene,camera);}
     uiTime+=dt;if(started&&uiTime>.15){updateHUD();uiTime=0;}
   }
   // Read-only diagnostic snapshot used by the local integration checks.
-  window.selene=Object.freeze({snapshot:()=>({ready,started,mode,player:{...player},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},orbitDistance:universe.state.distance,targetOrbitDistance:universe.state.targetDistance,moonRadius:MOON_RADIUS,earthDistance:EARTH_DISTANCE,footsteps:footstepCount,feet:astronaut.legs.map(l=>({position:l.world.toArray(),swing:l.swing,kneeQuaternion:l.lower.quaternion.toArray(),hipQuaternion:l.upper.quaternion.toArray()})),fps,ground:landscape.groundAt(player.x,player.z),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})});
+  window.selene=Object.freeze({snapshot:()=>({ready,started,mode,riding,rover:{...roverState},network:expedition.snapshot(),remoteCount:remotes.size,nearbyRocks:terrain.rocks.filter(r=>Math.hypot(r.x-player.x,r.z-player.z)<20).map(r=>({...r})),player:{...player},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},orbitDistance:universe.state.distance,targetOrbitDistance:universe.state.targetDistance,moonRadius:MOON_RADIUS,earthDistance:EARTH_DISTANCE,footsteps:footstepCount,feet:astronaut.legs.map(l=>({position:l.world.toArray(),swing:l.swing,kneeQuaternion:l.lower.quaternion.toArray(),hipQuaternion:l.upper.quaternion.toArray()})),fps,ground:terrain.groundAt(player.x,player.z),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})});
   animate();
 }

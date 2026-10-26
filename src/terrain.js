@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {createRockField} from './rocks.js';
 const TAU=Math.PI*2;
 export function randomGenerator(seed=8419){return()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
 export function hash(x,z){let n=(Math.imul(x|0,374761393)+Math.imul(z|0,668265263))|0;n=Math.imul(n^(n>>>13),1274126177);return ((n^(n>>>16))>>>0)/4294967295;}
@@ -23,6 +24,7 @@ export function createLandscape(){
   function heightAt(x,z){
     let h=(noise(x*.00045+11,z*.00045+78)-.5)*220+(noise(x*.0023+7,z*.0023-8)-.5)*48+(noise(x*.009,z*.009)-.5)*8;
     h+=(noise(x*.043+20,z*.043)-.5)*1.5+(noise(x*.22,z*.22+9)-.5)*.18;
+    h+=(noise(x*1.5+13,z*1.5)-.5)*.045;
     h-=(x*x+z*z)/(2*1737400);
     const nearby=bins.get(Math.floor(x/cell)+','+Math.floor(z/cell))||[];
     for(const c of nearby){
@@ -70,18 +72,22 @@ function makeRegolith(renderer){
   return {map:texture(color,true),normalMap:texture(normal)};
 }
 
-export function buildTerrain(scene,renderer,landscape){
+export async function buildTerrain(scene,renderer,landscape){
   const {heightAt,groundAt}=landscape,group=new THREE.Group();scene.add(group);
-  const textures=makeRegolith(renderer);
-  const material=new THREE.MeshStandardMaterial({map:textures.map,normalMap:textures.normalMap,normalScale:new THREE.Vector2(.9,.9),roughness:1,color:0xc5c5c5,vertexColors:true});
+  const textures=makeRegolith(renderer),loader=new THREE.TextureLoader();
+  const [map,normalMap,roughnessMap,aoMap]=await Promise.all(['color','normal','roughness','ao'].map(name=>loader.loadAsync(`assets/regolith/${name}.webp`)));
+  for(const texture of [map,normalMap,roughnessMap,aoMap]){texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=Math.min(12,renderer.capabilities.getMaxAnisotropy());}
+  map.colorSpace=THREE.SRGBColorSpace;
+  const material=new THREE.MeshStandardMaterial({map,normalMap,roughnessMap,aoMap,aoMapIntensity:.7,normalScale:new THREE.Vector2(.55,.55),roughness:1,color:0xa6a7a7,vertexColors:true});
   material.onBeforeCompile=shader=>{
     shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 vGround;');
     shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvGround = position.xz;');
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 vGround;');
     shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`
-      vec4 grains = texture2D(map, vGround / 5.0);
-      vec4 patches = texture2D(map, vGround / 61.0 + vec2(.37,.61));
-      diffuseColor *= vec4(grains.rgb * (.78 + patches.rgb * .6), 1.0);
+      vec4 grains = texture2D(map, vGround / 3.5);
+      vec4 patches = texture2D(map, vGround / 47.0 + vec2(.37,.61));
+      vec4 fine = texture2D(map, vGround / .63 + vec2(.13,.7));
+      diffuseColor *= vec4(grains.rgb * (.80 + patches.rgb * .42) * (.9 + fine.rgb * .2), 1.0);
     `);
   };
   const rings=[];
@@ -107,7 +113,7 @@ export function buildTerrain(scene,renderer,landscape){
         // Fine ring edge vertices follow the adjacent coarse edge exactly.
         if((ix===0||ix===n)&&iz%2)y=(heightAt(wx,wz-step)+heightAt(wx,wz+step))/2;
         if((iz===0||iz===n)&&ix%2)y=(heightAt(wx-step,wz)+heightAt(wx+step,wz))/2;
-        p[i*3]=wx;p[i*3+1]=y;p[i*3+2]=wz;uv[i*2]=wx/5;uv[i*2+1]=-wz/5;
+        p[i*3]=wx;p[i*3+1]=y;p[i*3+2]=wz;uv[i*2]=wx/3.5;uv[i*2+1]=-wz/3.5;
         const shade=.74+noise(wx*.013+3,wz*.013)*.22+noise(wx*.22,wz*.22)*.10;c[i*3]=c[i*3+1]=c[i*3+2]=shade;
       }
       geo.attributes.position.needsUpdate=true;geo.attributes.color.needsUpdate=true;geo.attributes.uv.needsUpdate=true;geo.computeVertexNormals();geo.computeBoundingSphere();
@@ -115,28 +121,8 @@ export function buildTerrain(scene,renderer,landscape){
   }
   update(0,0);
   const rockMaterial=new THREE.MeshStandardMaterial({color:0x909196,roughness:1,map:textures.map,normalMap:textures.normalMap,normalScale:new THREE.Vector2(1.2,1.2)});
-  const rockGeo=new THREE.IcosahedronGeometry(1,1),rp=rockGeo.attributes.position;
-  for(let i=0;i<rp.count;i++){const x=rp.getX(i),y=rp.getY(i),z=rp.getZ(i),scale=.8+noise(x*5+10,z*5+y*3)*.4;rp.setXYZ(i,x*scale,y*scale,z*scale);}
-  rockGeo.computeVertexNormals();
-  const rocks=new THREE.InstancedMesh(rockGeo,rockMaterial,2800),pebbles=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,0),rockMaterial,4500);
-  rocks.castShadow=true;rocks.receiveShadow=true;pebbles.receiveShadow=true;group.add(rocks,pebbles);
-  const dummy=new THREE.Object3D(),color=new THREE.Color();let rockX=Infinity,rockZ=Infinity;
-  function updateRocks(x,z){
-    const cx=Math.round(x/120)*120,cz=Math.round(z/120)*120;if(cx===rockX&&cz===rockZ)return;rockX=cx;rockZ=cz;
-    const rng=randomGenerator(7819+Math.round(cx)*421+Math.round(cz)*53);
-    for(const [mesh,radius,tiny] of [[rocks,460,false],[pebbles,100,true]]){
-      for(let i=0;i<mesh.count;i++){
-        const angle=rng()*TAU,d=Math.sqrt(rng())*radius,wx=cx+Math.cos(angle)*d,wz=cz+Math.sin(angle)*d;
-        let s=tiny?.012+rng()**2*.07:.08+rng()**5*1.7;
-        if(!tiny&&i<18)s=1.2+rng()*2.3;
-        if(Math.hypot(wx,wz)<2)s=.015;
-        dummy.position.set(wx,groundAt(wx,wz)+s*.16,wz);dummy.rotation.set(rng()*3,rng()*TAU,rng()*3);dummy.scale.set(s*(.8+rng()*.6),s*(.5+rng()*.45),s);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
-        color.setScalar(.45+rng()*.4);mesh.setColorAt(i,color);
-      }
-      mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;mesh.computeBoundingSphere();
-    }
-  }
-  updateRocks(0,0);
+  const rockField=await createRockField(group,renderer,landscape,rockMaterial);
+  const dummy=new THREE.Object3D();
 
   // Reusable tread decals and ballistic dust; both remain fixed to their contact point.
   const treadCanvas=document.createElement('canvas');treadCanvas.width=64;treadCanvas.height=128;const tc=treadCanvas.getContext('2d');
@@ -149,10 +135,10 @@ export function buildTerrain(scene,renderer,landscape){
   const dustCount=320,dustPos=new Float32Array(dustCount*3),dustColors=new Float32Array(dustCount*3),dustLives=new Float32Array(dustCount),dustVel=new Float32Array(dustCount*3);
   dustPos.fill(-10000);const dg=new THREE.BufferGeometry();dg.setAttribute('position',new THREE.BufferAttribute(dustPos,3));dg.setAttribute('color',new THREE.BufferAttribute(dustColors,3));
   const dust=new THREE.Points(dg,new THREE.PointsMaterial({size:.022,color:0x9c9da0,vertexColors:true,transparent:true,opacity:.65,depthWrite:false}));dust.frustumCulled=false;group.add(dust);let dustIndex=0;
-  function footstep(position,yaw,strength=1){
-    dummy.position.set(position.x,groundAt(position.x,position.z)+.012,position.z);
+  function footstep(position,yaw,strength=1,wheel=false){
+    dummy.position.set(position.x,rockField.groundAt(position.x,position.z)+.012,position.z);
     const dx=(groundAt(position.x+.12,position.z)-groundAt(position.x-.12,position.z))/.24,dz=(groundAt(position.x,position.z+.12)-groundAt(position.x,position.z-.12))/.24;
-    dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(-dx,1,-dz).normalize());dummy.rotateY(yaw);dummy.scale.set(1,1,1);dummy.updateMatrix();footprints.setMatrixAt(printIndex%500,dummy.matrix);printIndex++;footprints.count=Math.min(500,printIndex);footprints.instanceMatrix.needsUpdate=true;
+    dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(-dx,1,-dz).normalize());dummy.rotateY(yaw);dummy.scale.set(wheel?.86:1,1,wheel?1.5:1);dummy.updateMatrix();footprints.setMatrixAt(printIndex%500,dummy.matrix);printIndex++;footprints.count=Math.min(500,printIndex);footprints.instanceMatrix.needsUpdate=true;
     for(let k=0;k<12;k++){
       const i=dustIndex++%dustCount,j=i*3;dustPos[j]=position.x+(Math.random()-.5)*.12;dustPos[j+1]=position.y+.03;dustPos[j+2]=position.z+(Math.random()-.5)*.15;
       dustVel[j]=(Math.random()-.5)*.55*strength;dustVel[j+1]=.18+Math.random()*.4*strength;dustVel[j+2]=(Math.random()-.5)*.55*strength;dustLives[i]=1;
@@ -166,5 +152,5 @@ export function buildTerrain(scene,renderer,landscape){
     }
     dg.attributes.position.needsUpdate=true;dg.attributes.color.needsUpdate=true;
   }
-  return {group,update(x,z){update(x,z);updateRocks(x,z);},footstep,updateDust};
+  return {group,groundAt:rockField.groundAt,rockTopAt:rockField.surfaceAt,colliders:rockField.colliders,rocks:rockField.records,update(x,z){update(x,z);rockField.update(x,z);},footstep,wheelTrack:(p,yaw)=>footstep(p,yaw,.5,true),updateDust};
 }

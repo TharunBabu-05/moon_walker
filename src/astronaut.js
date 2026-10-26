@@ -111,7 +111,7 @@ export function createAstronaut(scene,groundAt,onFootstep){
     leg.foot.quaternion.setFromUnitVectors(UP,normal);
     if(leg.swing)leg.foot.rotateX(-Math.sin(leg.progress*Math.PI)*.25);
   }
-  function update(p,dt,lookPitch=0){
+  function update(p,dt,lookPitch=0,seated=false){
     time+=dt;const moving=p.speed>.06,fast=p.speed>1.65;
     phase+=dt*(moving?(fast?1.13:.78):0)*TAU;
     if(p.landed)landing=Math.min(.13,p.landingSpeed*.035);
@@ -119,7 +119,7 @@ export function createAstronaut(scene,groundAt,onFootstep){
     lean=damp(lean,moving?-.07-Math.min(.09,p.speed*.025):0,6,dt);
     const bob=moving&&p.grounded?Math.cos(phase*2)*.018:0;
     bodyY=damp(bodyY,bob-landing,12,dt);
-    root.position.set(p.x,p.y,p.z);root.rotation.y=p.yaw;
+    root.position.set(p.x,p.y,p.z);root.rotation.set(0,p.yaw,0);
     torso.position.y=bodyY;torso.rotation.x=lean;torso.rotation.z=moving?Math.sin(phase)*.018:0;
     head.rotation.x=clamp(-lookPitch*.22,-.15,.15);
     root.updateMatrixWorld(true);inverse.copy(root.matrixWorld).invert();
@@ -141,7 +141,7 @@ export function createAstronaut(scene,groundAt,onFootstep){
         if(leg.swing){
           leg.progress=Math.min(1,leg.progress+dt/(fast?.23:.36));const t=leg.progress,s=t*t*(3-2*t);
           leg.world.lerpVectors(leg.from,leg.target,s);leg.world.y+=Math.sin(t*Math.PI)*(fast?.25:.14);
-          if(t===1){leg.swing=false;leg.world.y=groundAt(leg.world.x,leg.world.z);onFootstep(leg.world,p.yaw,fast?1.4:1);}
+          if(t===1){leg.swing=false;leg.world.y=groundAt(leg.world.x,leg.world.z);if(!seated)onFootstep(leg.world,p.yaw,fast?1.4:1);}
         }
         if(!moving&&!other.swing&&error<=.055)lastStep=0;
       }
@@ -151,5 +151,20 @@ export function createAstronaut(scene,groundAt,onFootstep){
     for(const a of arms){a.shoulder.rotation.x=damp(a.shoulder.rotation.x,p.grounded?(moving?Math.sin(phase+(a.side<0?Math.PI:0))*.30:0):-.32,8,dt);a.shoulder.rotation.z=a.side*(p.grounded?.06:.22);a.elbow.rotation.x=-.18-Math.max(0,-a.shoulder.rotation.x)*.65;}
     pack.rotation.z=-torso.rotation.z*.3;
   }
-  return {root,update,legs,torso,head,visor,materials:{glass,gold}};
+  function updateSeated(p,dt){
+    update({...p,speed:0,grounded:true,landed:false},dt,0,true);
+    torso.rotation.set(-.08,0,0);torso.position.y=0;
+    const tilt=p.rover||p;root.position.y=p.y-.02;root.rotation.set(tilt.pitch||0,p.yaw,tilt.roll||0,'YXZ');root.updateMatrixWorld(true);inverse.copy(root.matrixWorld).invert();
+    for(const leg of legs){
+      leg.world=new THREE.Vector3(leg.side*.2,.62,-.80).applyMatrix4(root.matrixWorld);leg.swing=false;solveLeg(leg,p,.97);
+      leg.foot.rotation.set(-.12,0,0);
+    }
+    for(const arm of arms){arm.shoulder.rotation.x=-.85;arm.shoulder.rotation.z=arm.side*.08;arm.elbow.rotation.x=-.7;}
+  }
+  function dispose(){
+    const geometries=new Set(),materials=new Set(),textures=new Set();
+    root.traverse(node=>{if(node.geometry)geometries.add(node.geometry);if(node.material)for(const m of Array.isArray(node.material)?node.material:[node.material]){materials.add(m);if(m.map)textures.add(m.map);}});
+    geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());root.removeFromParent();
+  }
+  return {root,update,updateSeated,dispose,legs,torso,head,visor,materials:{glass,gold}};
 }

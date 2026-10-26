@@ -16,17 +16,19 @@
   <header>
     <a class="brand" href="#" aria-label="Selene home"><span class="brand-icon">◐</span><span>SELENE<small>LUNAR FIELD STUDY / 07</small></span></a>
     <nav id="views" aria-label="Camera views" hidden><button data-view="first" aria-pressed="true"><kbd>1</kbd> First person</button><button data-view="follow" aria-pressed="false"><kbd>2</kbd> Astronaut</button><button data-view="orbit" aria-pressed="false"><kbd>3</kbd> Orbit</button></nav>
-    <div class="header-tools"><button id="quality" title="Toggle rendering quality">HIGH DETAIL</button><button id="help-button" aria-label="Show controls">?</button></div>
+    <div class="header-tools"><button id="crew-button" aria-label="Open multiplayer expedition"><span class="live-dot"></span> CREW <span id="crew-count">1</span></button><button id="quality" title="Toggle rendering quality">HIGH DETAIL</button><button id="help-button" aria-label="Show controls">?</button></div>
   </header>
   <main id="welcome"><div class="welcome-content">
     <p class="eyebrow"><span></span> FROM DUST TO ORBIT</p><h1>A world<br>beneath<br><em>your boots.</em></h1>
-    <p class="intro">Walk through ancient impact scars. Watch every step in lunar gravity. Pull back until the entire Moon hangs in the dark.</p>
+    <p class="intro">Boots in the dust. Wheels across the highlands. Explore detailed rock formations, drive a lunar buggy, and invite your crew to the same Moon.</p>
     <div class="mission-facts"><div><b>01—03</b><span>WAYS TO EXPLORE</span></div><div><b>1.62 m/s²</b><span>LUNAR GRAVITY</span></div><div><b>8K</b><span>LRO ORBITAL IMAGERY</span></div></div>
     <button id="begin" class="primary" disabled>PREPARING SURFACE <span>↗</span></button><p class="load-status" id="load-status" role="status">Preparing lunar terrain…</p>
   </div><p class="landing-caption"><i></i> SELENE EXPEDITION<small>PROCEDURAL LUNAR HIGHLANDS</small></p></main>
   <div id="hud" hidden>
     <section class="telemetry" aria-label="Exploration telemetry"><div class="section-title"><span id="telemetry-title">SURFACE TELEMETRY</span><i></i></div><dl><div><dt id="metric-a-label">Ground speed</dt><dd id="metric-a">0.0 <small>m/s</small></dd></div><div><dt id="metric-b-label">Height above ground</dt><dd id="metric-b">0.00 <small>m</small></dd></div><div><dt id="metric-c-label">Locomotion</dt><dd id="metric-c">STANDING</dd></div></dl><p id="coordinates">00.0 E &nbsp; 00.0 N</p></section>
     <div id="surface-note"><span class="live-dot"></span> <span id="surface-state">CONTACT / REGOLITH</span></div>
+    <aside id="rover-card"><span class="eyebrow">LUNAR ROVING VEHICLE</span><strong id="rover-status">YOUR BUGGY IS PARKED NEARBY</strong><p id="rover-hint">Walk up to the buggy. Press E to drive.</p><button id="rover-action">Enter buggy <kbd>E</kbd></button><button id="find-rover">Locate my buggy</button></aside>
+    <div id="crew-presence" hidden><span class="live-dot"></span><span id="presence-text">EXPEDITION CONNECTED</span></div>
     <div id="reticle" aria-hidden="true">+</div><button id="resume" hidden>Click to look · or drag the surface</button>
     <div id="orbit-tools" hidden><p class="eyebrow">ORBITAL OBSERVATORY</p><h2>The Moon.<br>All of it.</h2><p>Drag to orbit. Scroll to travel<br>from the cratered surface to Earth.</p><div class="orbit-presets"><button id="whole-moon">Whole Moon <span>↗</span></button><button id="earth-moon">Earth + Moon <span>↗</span></button></div><div class="zoom-row"><button id="zoom-in" aria-label="Zoom in">− distance</button><button id="zoom-out" aria-label="Zoom out">+ distance</button></div><button id="return-surface">↓ Return to my astronaut</button><small>NASA / LRO IMAGERY<br>TRUE BODY SIZES & MEAN SEPARATION</small></div>
     <div class="body-label" id="moon-label" hidden>MOON <span>1,737.4 km radius</span></div><div class="body-label" id="earth-label" hidden>EARTH <span>384,400 km from Moon</span></div>
@@ -36,9 +38,20 @@
     <div class="touch-controls"><div class="touch-pad"><button data-key="KeyW" aria-label="Walk forward">↑</button><button data-key="KeyA" aria-label="Walk left">←</button><button data-key="KeyS" aria-label="Walk back">↓</button><button data-key="KeyD" aria-label="Walk right">→</button></div><button id="touch-jump">JUMP</button></div>
   </div>
   <div id="toast" role="status"></div>
+  <dialog id="crew-dialog" aria-labelledby="crew-title">
+    <button id="close-crew" class="dialog-close" aria-label="Close expedition">×</button>
+    <p class="eyebrow">A SHARED LANDING SITE / UP TO 8 EXPLORERS</p><h2 id="crew-title">Bring your crew.</h2>
+    <p>Walk together and see your friends drive across the highlands. Start an expedition, then send them your invite link.</p>
+    <label class="form-label" for="explorer-name">YOUR CALLSIGN</label><input id="explorer-name" maxlength="20" placeholder="Explorer" autocomplete="nickname">
+    <div id="crew-setup"><button id="host-expedition" class="primary">Start an expedition <span>↗</span></button><div class="join-row"><label class="form-label" for="room-code">HAVE AN INVITE?</label><div><input id="room-code" maxlength="8" placeholder="8 character code" spellcheck="false" autocomplete="off"><button id="join-expedition">Join crew</button></div></div></div>
+    <p id="network-status" role="status" aria-live="polite">Explore solo, or invite a crew.</p>
+    <div id="crew-connected" hidden><div class="invite-title"><span>EXPEDITION CODE</span><strong id="active-code"></strong></div><label class="form-label" for="invite-link">SEND THIS LINK TO YOUR FRIENDS</label><div class="invite-row"><input id="invite-link" readonly aria-label="Expedition invite link"><button id="copy-invite">Copy invite</button></div><ul id="crew-list" aria-label="Expedition crew"></ul><button id="leave-expedition">Leave expedition</button></div>
+    <p class="science-note">The host must keep this tab open. Each explorer has their own buggy. Direct connections may be blocked on some school, work, or mobile networks; try another network if joining fails.</p>
+  </dialog>
   <dialog id="help"><button id="close-help" aria-label="Close controls">×</button><p class="eyebrow">FIELD GUIDE</p><h2>Find your footing.</h2><p>Three viewpoints, from a single footprint to the whole Moon.</p>
     <dl class="help-controls"><div><dt>1 · First person</dt><dd>Look through the astronaut’s eyes. Click for mouse look, or drag.</dd></div><div><dt>2 · Astronaut</dt><dd>Follow your astronaut. Drag to orbit; scroll to move the camera closer.</dd></div><div><dt>3 · Orbit</dt><dd>Explore every side of the Moon. Scroll out to see Earth, or use the Earth + Moon button.</dd></div><div><dt>WASD / arrow keys</dt><dd>Walk in the direction of the camera. Shift to lope. Space to jump.</dd></div><div><dt>V / H / Esc</dt><dd>Cycle views / hide the interface / release the mouse.</dd></div></dl>
-    <p class="science-note">Jumps and loose dust use 1.62 m/s² gravity. Walking uses procedural foot placement and joint animation. The walkable highlands are an imagined landscape; the globe uses NASA LRO imagery.</p><a href="https://svs.gsfc.nasa.gov/4720/" target="_blank" rel="noopener noreferrer">Lunar imagery: NASA’s Scientific Visualization Studio ↗</a>
+    <p class="science-note"><b>E</b> enters or exits your nearby buggy. <b>W / S</b> accelerate and reverse, <b>A / D</b> steer, <b>Space</b> brakes, and <b>Shift</b> raises the speed limit. Stop before exiting. Use <b>CREW</b> to host or join an expedition.</p>
+    <p class="science-note">Jumps, rover flight, and loose dust use 1.62 m/s² gravity. The walkable highlands are an imagined landscape with detailed Poly Haven rock models and desaturated ground materials; the globe uses NASA LRO imagery.</p><a href="https://svs.gsfc.nasa.gov/4720/" target="_blank" rel="noopener noreferrer">Lunar imagery: NASA’s Scientific Visualization Studio ↗</a>
   </dialog>
   <section id="error" hidden role="alert"><h2>The surface couldn’t load.</h2><p id="error-message"></p><button onclick="location.reload()">Try again</button></section>
   <script type="module" src="src/main.js"></script>

@@ -14,6 +14,7 @@ try{
   await page.screenshot({path:'artifacts/02-first-person.png'});
   await page.keyboard.press('Digit2');
   await page.waitForFunction(()=>window.selene.snapshot().mode==='follow');
+  await page.locator('#scene').focus();
   const initial=await page.evaluate(()=>window.selene.snapshot());
   await page.keyboard.down('KeyW');
   await page.waitForFunction(()=>window.selene.snapshot().player.distance>.45,{},{timeout:15000});
@@ -28,6 +29,19 @@ try{
   await page.waitForFunction(()=>{const s=window.selene.snapshot();return !s.player.grounded&&s.player.y-s.ground>.4;},{},{timeout:12000});
   await page.screenshot({path:'artifacts/04-jump.png'});
   await page.waitForFunction(()=>window.selene.snapshot().player.grounded,{},{timeout:15000});
+  // Approach a rendered boulder through normal controls and verify solid contact.
+  const approach=await page.evaluate(()=>window.selene.snapshot());
+  const rock=approach.nearbyRocks.find(r=>r.x===-3&&r.z===-5);assert.ok(rock);
+  const currentYaw=Math.atan2(approach.camera.x-approach.player.x,approach.camera.z-approach.player.z);
+  const rockYaw=Math.atan2(-(rock.x-approach.player.x),-(rock.z-approach.player.z));
+  const drag=Math.atan2(Math.sin(currentYaw-rockYaw),Math.cos(currentYaw-rockYaw))/.004;
+  await page.mouse.move(720,430);await page.mouse.down();await page.mouse.move(720+drag,430,{steps:12});await page.mouse.up();
+  await page.locator('#scene').focus();await page.keyboard.down('KeyW');
+  await page.waitForFunction(r=>{const p=window.selene.snapshot().player;return Math.hypot(p.x-r.x,p.z-r.z)<r.radius+.65;},rock,{timeout:25000});
+  const contact=await page.evaluate(()=>window.selene.snapshot().player);
+  assert.ok(Math.hypot(contact.x-rock.x,contact.z-rock.z)>=rock.radius+.30,'boulder collision keeps the astronaut outside the rock');
+  await page.screenshot({path:'artifacts/14-rock-contact.png'});await page.keyboard.up('KeyW');
+  await page.waitForFunction(()=>window.selene.snapshot().player.speed<.02,{},{timeout:15000});
   const beforeOrbit=await page.evaluate(()=>window.selene.snapshot().player);
   await page.keyboard.press('Digit3');
   await page.waitForFunction(()=>window.selene.snapshot().mode==='orbit');
