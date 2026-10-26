@@ -21,7 +21,7 @@ export function createLandscape(){
       const key=x+','+z;if(!bins.has(key))bins.set(key,[]);bins.get(key).push(c);
     }
   });
-  function heightAt(x,z){
+  function rawHeightAt(x,z){
     let h=(noise(x*.00045+11,z*.00045+78)-.5)*220+(noise(x*.0023+7,z*.0023-8)-.5)*48+(noise(x*.009,z*.009)-.5)*8;
     h+=(noise(x*.043+20,z*.043)-.5)*1.5+(noise(x*.22,z*.22+9)-.5)*.18;
     h+=(noise(x*1.5+13,z*1.5)-.5)*.045;
@@ -37,6 +37,12 @@ export function createLandscape(){
       if(c.r>200)h+=c.r*.028*Math.exp(-u*u*45);
     }
     return h;
+  }
+  const padHeight=rawHeightAt(-25,28);
+  function heightAt(x,z){
+    const d=Math.max(Math.abs(x+25)/18,Math.abs(z-28)/19);
+    const blend=THREE.MathUtils.smoothstep(d,.85,1.45);
+    return THREE.MathUtils.lerp(padHeight,rawHeightAt(x,z),blend);
   }
   // Sample exactly the triangle interpolation of the finest (0.5 m) mesh.
   function groundAt(x,z){

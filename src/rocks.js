@@ -34,6 +34,7 @@ export async function createRockField(group,renderer,landscape,fallbackMaterial)
   const dummy=new THREE.Object3D(),color=new THREE.Color(),colliders=[],records=[];
   let anchorX=Infinity,anchorZ=Infinity;
   function addRock(x,z,radius,yaw,variant){
+    if(Math.abs(x+25)<19+radius&&Math.abs(z-28)<20+radius)return;
     // Keep the landing point, instrument and parked buggy unobstructed.
     if(Math.hypot(x,z)<2.7||Math.hypot(x-3,z-2)<3.5||Math.hypot(x+4,z-5)<1)return;
     const ground=Math.min(landscape.groundAt(x,z),landscape.groundAt(x+radius*.55,z),landscape.groundAt(x-radius*.55,z),landscape.groundAt(x,z+radius*.55),landscape.groundAt(x,z-radius*.55));

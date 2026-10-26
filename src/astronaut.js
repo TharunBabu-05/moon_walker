@@ -148,23 +148,41 @@ export function createAstronaut(scene,groundAt,onFootstep){
       solveLeg(leg,p,.98+bodyY);
     }
     initialized=true;
-    for(const a of arms){a.shoulder.rotation.x=damp(a.shoulder.rotation.x,p.grounded?(moving?Math.sin(phase+(a.side<0?Math.PI:0))*.30:0):-.32,8,dt);a.shoulder.rotation.z=a.side*(p.grounded?.06:.22);a.elbow.rotation.x=-.18-Math.max(0,-a.shoulder.rotation.x)*.65;}
+    for(const a of arms){a.shoulder.rotation.x=damp(a.shoulder.rotation.x,p.grounded?(moving?Math.sin(phase+(a.side<0?Math.PI:0))*.30:0):-.32,8,dt);a.shoulder.rotation.y=0;a.elbow.rotation.y=a.elbow.rotation.z=0;a.shoulder.rotation.z=a.side*(p.grounded?.06:.22);a.elbow.rotation.x=-.18-Math.max(0,-a.shoulder.rotation.x)*.65;}
     pack.rotation.z=-torso.rotation.z*.3;
   }
-  function updateSeated(p,dt){
-    update({...p,speed:0,grounded:true,landed:false},dt,0,true);
-    torso.rotation.set(-.08,0,0);torso.position.y=0;
-    const tilt=p.rover||p;root.position.y=p.y-.02;root.rotation.set(tilt.pitch||0,p.yaw,tilt.roll||0,'YXZ');root.updateMatrixWorld(true);inverse.copy(root.matrixWorld).invert();
+  let handErrors=[0,0];
+  function updateSeated(p,dt,pose){
+    torso.rotation.set(0,0,0);torso.position.y=0;head.rotation.set(0,0,0);bodyY=0;
+    if(pose)pose.matrix.decompose(root.position,root.quaternion,root.scale);
+    else{const tilt=p.rover||p;root.position.set(p.x,p.y-.02,p.z);root.rotation.set(tilt.pitch||0,p.yaw,tilt.roll||0,'YXZ');}
+    root.updateMatrixWorld(true);inverse.copy(root.matrixWorld).invert();
     for(const leg of legs){
       leg.world=new THREE.Vector3(leg.side*.2,.62,-.80).applyMatrix4(root.matrixWorld);leg.swing=false;solveLeg(leg,p,.97);
       leg.foot.rotation.set(-.12,0,0);
     }
-    for(const arm of arms){arm.shoulder.rotation.x=-.85;arm.shoulder.rotation.z=arm.side*.08;arm.elbow.rotation.x=-.7;}
+    // Two-bone inverse kinematics pins each glove to a moving wheel grip.
+    const torsoInverse=new THREE.Matrix4().copy(torso.matrixWorld).invert();
+    for(let i=0;i<arms.length;i++){
+      const arm=arms[i],target=pose?pose.grips[i].clone().applyMatrix4(torsoInverse):new THREE.Vector3(arm.side*.18,1.3,-.48);
+      const shoulder=arm.shoulder.position.clone(),restUpper=arm.elbow.position.clone(),restHand=new THREE.Vector3(0,-.36,-.015);
+      const upperLength=restUpper.length(),lowerLength=restHand.length(),direction=target.clone().sub(shoulder);
+      const distance=clamp(direction.length(),.08,upperLength+lowerLength-.001);direction.normalize();
+      const along=(upperLength**2-lowerLength**2+distance**2)/(2*distance);
+      const bend=Math.sqrt(Math.max(0,upperLength**2-along**2));
+      const hint=new THREE.Vector3(arm.side*.8,-.45,.2);hint.addScaledVector(direction,-hint.dot(direction)).normalize();
+      const elbow=shoulder.clone().addScaledVector(direction,along).addScaledVector(hint,bend);
+      arm.shoulder.quaternion.setFromUnitVectors(restUpper.clone().normalize(),elbow.clone().sub(shoulder).normalize());
+      const forearm=target.clone().sub(elbow).applyQuaternion(arm.shoulder.quaternion.clone().invert()).normalize();
+      arm.elbow.quaternion.setFromUnitVectors(restHand.clone().normalize(),forearm);
+      root.updateMatrixWorld(true);handErrors[i]=pose?arm.elbow.localToWorld(restHand.clone()).distanceTo(pose.grips[i]):0;
+    }
+    initialized=false;
   }
   function dispose(){
     const geometries=new Set(),materials=new Set(),textures=new Set();
     root.traverse(node=>{if(node.geometry)geometries.add(node.geometry);if(node.material)for(const m of Array.isArray(node.material)?node.material:[node.material]){materials.add(m);if(m.map)textures.add(m.map);}});
     geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());root.removeFromParent();
   }
-  return {root,update,updateSeated,dispose,legs,torso,head,visor,materials:{glass,gold}};
+  return {root,update,updateSeated,dispose,legs,torso,head,visor,handErrors:()=>[...handErrors],materials:{glass,gold}};
 }

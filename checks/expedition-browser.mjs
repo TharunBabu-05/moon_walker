@@ -49,11 +49,26 @@ try{
   await guest.bringToFront();await guest.keyboard.press('Digit2');await guest.locator('#scene').focus();
   await guest.keyboard.press('KeyE');await guest.waitForFunction(()=>window.selene.snapshot().riding);
   await host.waitForFunction(()=>window.selene.snapshot().network.members.some(m=>m.state?.riding),{},{timeout:15000});
+  await host.waitForFunction(()=>window.selene.snapshot().renderedRemotes.some(m=>m.state.riding&&m.handErrors.every(e=>e<.015)),{},{timeout:15000});
+  await guest.keyboard.down('KeyW');
+  const playback=await host.evaluate(()=>new Promise(resolve=>{
+    const points=[],start=performance.now();function frame(){const r=selene.snapshot().renderedRemotes[0];if(r?.state.rover)points.push({x:r.state.rover.x,z:r.state.rover.z,errors:r.handErrors});if(performance.now()-start<2400)requestAnimationFrame(frame);else resolve(points);}frame();
+  }));
+  await guest.keyboard.up('KeyW');await guest.keyboard.down('Space');await guest.waitForFunction(()=>selene.snapshot().rover.speed<.2,{},{timeout:15000});await guest.keyboard.up('Space');
+  assert.ok(new Set(playback.map(p=>p.x.toFixed(3)+','+p.z.toFixed(3))).size>6,'remote buggy plays intermediate positions');
+  assert.ok(playback.every(p=>p.errors.every(e=>e<.015)),'remote driver stays attached to wheel');
   await guest.screenshot({path:'artifacts/12-multiplayer-surface.png'});
+  // Both users select the same entrance. Contact resolution must separate them.
+  await host.locator('#atlas-button').click();await host.locator('#atlas-station').click();
+  await guest.locator('#atlas-button').click();await guest.locator('#atlas-station').click();
+  await guest.waitForTimeout(1400);
+  const a=await snapshot(host),b=await snapshot(guest);
+  assert.ok(Math.hypot(a.player.x-b.player.x,a.player.z-b.player.z)>=.66,'two connected explorers do not occupy the same physical space');
+  assert.ok(a.predictedContacts+b.predictedContacts+a.network.contactCount+b.network.contactCount>0);
   await guest.getByRole('button',{name:'Open multiplayer expedition'}).click();await guest.getByRole('button',{name:'Leave expedition'}).click();
   await host.waitForFunction(()=>window.selene.snapshot().network.count===1,{},{timeout:15000});
   await host.setViewportSize({width:390,height:844});await host.screenshot({path:'artifacts/13-mobile-expedition.png'});
   assert.equal(await host.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   assert.deepEqual(errors,[],'no browser or graphics errors');
-  console.log(JSON.stringify({passed:true,buggy:'drive / steer / brake / exit',multiplayer:'two peers connected, movement and vehicle state replicated, guest departure cleaned up',room:code,errors},null,2));
+  console.log(JSON.stringify({passed:true,buggy:'drive / steer / brake / exit',multiplayer:'two real peers, buffered vehicle playback, driver grip contact, shared physical contact, departure cleanup',playbackFrames:playback.length,room:code,errors},null,2));
 }finally{await browser.close();}

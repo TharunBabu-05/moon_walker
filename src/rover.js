@@ -34,8 +34,14 @@ export function createRover(scene,groundAt,state){
     const gauge=mesh(chassis,new THREE.CylinderGeometry(.045,.045,.008,20),white,-.17+i*.17,1.035,-.72);
     gauge.rotation.x=.1;
   }
-  strut(chassis,[-.39,.7,-.65],[-.39,1.18,-.52],.024);
-  const control=mesh(chassis,new THREE.TorusGeometry(.13,.017,8,24),black,-.39,1.18,-.52);control.rotation.x=-.65;
+  strut(chassis,[-.39,.7,-.65],[-.39,1.28,-.48],.024);
+  const column=new THREE.Group();column.position.set(-.39,1.28,-.48);column.rotation.x=-.55;chassis.add(column);
+  const steeringWheel=new THREE.Group();column.add(steeringWheel);
+  mesh(steeringWheel,new THREE.TorusGeometry(.18,.019,10,40),black);
+  for(let i=0;i<3;i++){const a=i*Math.PI*2/3;strut(steeringWheel,[0,0,0],[Math.cos(a)*.16,Math.sin(a)*.16,0],.011);}
+  mesh(steeringWheel,new THREE.CylinderGeometry(.045,.045,.025,16),alloy).rotation.x=Math.PI/2;
+  const grips=[-1,1].map(side=>{const grip=new THREE.Object3D();grip.position.set(side*.18,0,0);steeringWheel.add(grip);return grip;});
+  const driverAnchor=new THREE.Object3D();driverAnchor.position.set(-.39,-.02,0);chassis.add(driverAnchor);
   box(chassis,1.3,.23,.58,foil,0,.8,1.04);box(chassis,1.36,.04,.6,white,0,.93,1.04);
   for(const x of [-.62,.62])strut(chassis,[x,.95,.77],[x,.95,1.32],.018);
   strut(chassis,[.64,.8,1.16],[.64,2.55,1.16],.012);
@@ -88,6 +94,7 @@ export function createRover(scene,groundAt,state){
   function update(p,dt){
     root.position.set(p.x,p.y,p.z);root.rotation.set(0,p.yaw,0);
     chassis.rotation.x=damp(chassis.rotation.x,p.pitch||0,8,dt);chassis.rotation.z=damp(chassis.rotation.z,p.roll||0,8,dt);
+    steeringWheel.rotation.z=-(p.steering||0)*1.5;
     for(const wheel of wheels){
       const dx=Math.cos(p.yaw)*wheel.side*1.01+Math.sin(p.yaw)*wheel.z,dz=-Math.sin(p.yaw)*wheel.side*1.01+Math.cos(p.yaw)*wheel.z;
       const target=THREE.MathUtils.clamp(groundAt(p.x+dx,p.z+dz)-p.y+.39,.08,.68);
@@ -97,5 +104,6 @@ export function createRover(scene,groundAt,state){
     }
   }
   update(state,.016);
-  return {root,update};
+  function driverPose(){root.updateMatrixWorld(true);return {matrix:driverAnchor.matrixWorld.clone(),grips:grips.map(g=>g.getWorldPosition(new THREE.Vector3()))};}
+  return {root,update,driverPose};
 }

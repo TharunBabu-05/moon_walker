@@ -61,11 +61,12 @@ export async function createUniverse(renderer,onProgress){
     const system=THREE.MathUtils.smoothstep(state.distance,40000,410000);target.set(EARTH_DISTANCE*.5*system,0,0);
     camera.position.set(target.x+Math.sin(state.yaw)*Math.cos(state.pitch)*state.distance,Math.sin(state.pitch)*state.distance,target.z+Math.cos(state.yaw)*Math.cos(state.pitch)*state.distance);
     camera.lookAt(target);camera.near=Math.max(1,(state.distance-MOON_RADIUS)*.00003);camera.far=state.distance+1800000;camera.updateProjectionMatrix();starField.position.copy(camera.position);
-    marker.visible=state.distance<30000;orbit.visible=state.distance>90000;
+    marker.visible=!!state.site&&state.distance<30000;orbit.visible=state.distance>90000;
   }
   function zoom(delta){state.targetDistance=THREE.MathUtils.clamp(state.targetDistance*Math.exp(delta*.0018),MOON_RADIUS+80,900000);}
   function preset(name){state.yaw=0;state.pitch=name==='system'?.20:.16;state.targetDistance=name==='system'?570000:6500;}
+  function focusSite(site){state.site=site;state.yaw=site.lon*Math.PI/180;state.pitch=site.lat*Math.PI/180;state.targetDistance=3900;marker.position.set(Math.sin(state.yaw)*Math.cos(state.pitch),Math.sin(state.pitch),Math.cos(state.yaw)*Math.cos(state.pitch)).multiplyScalar(MOON_RADIUS+18);}
   function dispose(){albedo.dispose();elevation.dispose();}
   update(1);
-  return {...state,state,update,zoom,preset,dispose};
+  return {...state,state,update,zoom,preset,focusSite,dispose};
 }

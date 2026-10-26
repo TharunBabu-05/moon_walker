@@ -7,11 +7,17 @@
     "start": "node server.mjs",
     "prepare:assets": "node scripts/prepare-assets.mjs",
     "prepare:expedition": "node scripts/prepare-expedition-assets.mjs",
-    "check": "node --check src/main.js && node --check src/terrain.js && node --check src/astronaut.js && node --check src/universe.js && node --check src/physics.js && node --check src/rocks.js && node --check src/rover.js && node --check src/world.js && node --check src/multiplayer.js",
-    "test": "node --test checks/physics.test.mjs checks/expedition.test.mjs",
+    "check": "node --check src/main.js && node --check src/terrain.js && node --check src/astronaut.js && node --check src/universe.js && node --check src/physics.js && node --check src/rocks.js && node --check src/rover.js && node --check src/world.js && node --check src/multiplayer.js && node --check src/motion.js && node --check src/contacts.js && node --check src/station.js && node --check src/atlas.js && node --check src/lunar-sites.js",
+    "test": "node --test checks/physics.test.mjs checks/expedition.test.mjs checks/upgrade.test.mjs",
     "test:browser": "node checks/browser.mjs",
-    "test:expedition": "node checks/expedition-browser.mjs"
+    "test:expedition": "node checks/expedition-browser.mjs",
+    "test:upgrade": "node checks/upgrade-browser.mjs"
   },
-  "dependencies": { "three": "0.160.0" },
-  "devDependencies": { "playwright": "1.56.1", "sharp": "0.34.4" }
+  "dependencies": {
+    "three": "0.160.0"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1",
+    "sharp": "0.34.4"
+  }
 }
