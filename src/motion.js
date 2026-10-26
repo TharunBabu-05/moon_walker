@@ -15,6 +15,7 @@ function blend(a,b,t,seconds){
   out.yaw=a.yaw+angleDelta(a.yaw,b.yaw)*t;
   out.grounded=t<.5?a.grounded:b.grounded;out.riding=t<.5?a.riding:b.riding;
   if(a.rover&&b.rover)out.rover=blend(a.rover,b.rover,t,seconds);
+  if(a.dismount&&b.dismount)out.dismount={...b.dismount,progress:mix(a.dismount.progress,b.dismount.progress,t)};
   return out;
 }
 export class MotionBuffer{

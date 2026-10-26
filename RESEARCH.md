@@ -32,3 +32,20 @@ The atlas is a curated selection, not a complete lunar gazetteer. Longitude is e
 NASA's [Artemis infrastructure overview](https://ntrs.nasa.gov/api/citations/20220015432/downloads/ARC%20Overview%20DJK%2010062022%20%26%20Artemis.pdf) and [Artemis science/infrastructure discussion](https://science.nasa.gov/wp-content/uploads/2023/05/NASAHeliophysics__Artemis__DecadalSurveySupplemental.pdf) informed the separation of habitation, mobility, power and communications systems.
 
 The game's station is an original fictional design, not a replica of an operational lunar station or a validated engineering design. It has a roughly 6.4 m diameter pressure-vessel form, raised deck, two proximity doors, ramp, laboratory equipment, solar arrays, radiator and communications dish. It is explorable on foot. Pressure, airlock cycling, power balance, radiation shielding and life support are not simulated.
+
+## Terrain continuity and navigation revision
+
+The crater generator previously added the ejecta blanket only for radius ratio u > 1. That introduced an actual height discontinuity (about 1.7 m for the nearby large crater), creating the staircase silhouette when triangulated. The blanket now fades in smoothly across the rim, and all crater contributions taper to zero before their outer cutoff. The spatial bins include the maximum irregular radius. The habitat pad now uses an elliptical, gradual transition instead of a square maximum-distance boundary.
+
+The local surface map is separate from the historical geographic atlas because the walking mesh is generated. Navigation uses the same metre coordinates as movement, matching X and Z scale in both maps. Bounded A* search favours lower slopes and checks sampled obstacle clearance; it reports failure rather than presenting an impassable direct line as a solved route. Dismounts transmit a bounded transition state so other explorers can render the same climb-out.
+
+## Historical flag deployment references
+
+- [NASA Apollo program](https://www.nasa.gov/the-apollo-program/): six US flags deployed by Apollo crews.
+- [NASA: Apollo 11 surface activities](https://www.nasa.gov/history/50-years-ago-one-small-step-one-giant-leap/): telescoping crossbar and retained folds in the fabric.
+- [NASA Apollo Lunar Surface Journal](https://www.nasa.gov/wp-content/uploads/static/history/alsj/ApolloFlags-Condition.html): Aldrin reported the Apollo 11 flag falling during liftoff; current condition is not assumed from a deployment reconstruction.
+- [Chinese consulate, citing CNSA](https://brisbane.china-consulate.gov.cn/eng/zlgxwx/202012/t20201208_140511.htm): Chang'e 5's lander-ascender combination displayed a flag before ascent.
+- [CNSA Chang'e 6 mission timeline](https://www.cnsa.gov.cn/english/n6465652/n6465653/c10573102/content.html): flag display following far-side sampling.
+- [Wuhan government](https://english.wuhan.gov.cn/H_1/NWP/202406/t20240606_2412383.shtml): Chang'e 6's 200 by 300 mm basalt-based flag and its distinction from earlier painted insignia.
+
+The game represents only these sourced deployments as local flag exhibits. It does not infer that every lunar mission planted a pole-mounted flag. The mission-level globe pins are historical site locations, not surveyed flag-pole coordinates.

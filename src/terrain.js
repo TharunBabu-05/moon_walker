@@ -4,6 +4,15 @@ const TAU=Math.PI*2;
 export function randomGenerator(seed=8419){return()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
 export function hash(x,z){let n=(Math.imul(x|0,374761393)+Math.imul(z|0,668265263))|0;n=Math.imul(n^(n>>>13),1274126177);return ((n^(n>>>16))>>>0)/4294967295;}
 export function noise(x,z){const ix=Math.floor(x),iz=Math.floor(z);let u=x-ix,v=z-iz;u=u*u*(3-2*u);v=v*v*(3-2*v);return THREE.MathUtils.lerp(THREE.MathUtils.lerp(hash(ix,iz),hash(ix+1,iz),u),THREE.MathUtils.lerp(hash(ix,iz+1),hash(ix+1,iz+1),u),v);}
+export function craterRelief(u,r,d,angle=0){
+  if(u>=1.6)return 0;
+  const taper=1-THREE.MathUtils.smoothstep(u,1.35,1.6);
+  const bowl=u<1?-r*d*(1-u*u)**2:0;
+  const rim=r*.064*Math.exp(-(((u-.99)/.105)**2))*(1+.13*Math.sin(angle*19));
+  // Ejecta must join continuously across the rim; a conditional u>1 adds a cliff.
+  const ejecta=r*.013*Math.exp(-(((u-1.12)/.28)**2))*THREE.MathUtils.smoothstep(u,.84,1.08);
+  return (bowl+rim+ejecta+(r>200?r*.028*Math.exp(-u*u*45):0))*taper;
+}
 
 export function createLandscape(){
   const rng=randomGenerator(71903),craters=[
@@ -16,7 +25,7 @@ export function createLandscape(){
   for(let i=0;i<100;i++){const x=(rng()-.5)*180,z=(rng()-.5)*180;if(Math.hypot(x,z)<2.5)continue;craters.push({x,z,r:.45+rng()**2*3.2,d:.16+rng()*.10});}
   const bins=new Map(),cell=128;
   craters.forEach(c=>{
-    const extent=c.r*1.6;
+    const extent=c.r*1.7;
     for(let x=Math.floor((c.x-extent)/cell);x<=Math.floor((c.x+extent)/cell);x++)for(let z=Math.floor((c.z-extent)/cell);z<=Math.floor((c.z+extent)/cell);z++){
       const key=x+','+z;if(!bins.has(key))bins.set(key,[]);bins.get(key).push(c);
     }
@@ -30,18 +39,14 @@ export function createLandscape(){
     for(const c of nearby){
       const dx=x-c.x,dz=z-c.z,a=Math.atan2(dz,dx),d=Math.hypot(dx,dz);
       const radius=c.r*(1+.025*Math.sin(a*7+c.x)+.017*Math.sin(a*13));const u=d/radius;
-      if(u>1.6)continue;
-      if(u<1)h-=c.r*c.d*(1-u*u)**2;
-      h+=c.r*.064*Math.exp(-(((u-.99)/.105)**2))*(1+.13*Math.sin(a*19));
-      if(u>1)h+=c.r*.013*Math.exp(-(((u-1.12)/.28)**2));
-      if(c.r>200)h+=c.r*.028*Math.exp(-u*u*45);
+      h+=craterRelief(u,c.r,c.d,a);
     }
     return h;
   }
   const padHeight=rawHeightAt(-25,28);
   function heightAt(x,z){
-    const d=Math.max(Math.abs(x+25)/18,Math.abs(z-28)/19);
-    const blend=THREE.MathUtils.smoothstep(d,.85,1.45);
+    const d=Math.hypot((x+25)/20,(z-28)/22);
+    const blend=THREE.MathUtils.smoothstep(d,.9,2.5);
     return THREE.MathUtils.lerp(padHeight,rawHeightAt(x,z),blend);
   }
   // Sample exactly the triangle interpolation of the finest (0.5 m) mesh.

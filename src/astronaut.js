@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { damp, clamp, angleDelta } from './physics.js';
+import {smooth,exitPosition} from './dismount.js';
 const UP=new THREE.Vector3(0,1,0),DOWN=new THREE.Vector3(0,-1,0),TAU=Math.PI*2;
 
 export function createAstronaut(scene,groundAt,onFootstep){
@@ -179,10 +180,27 @@ export function createAstronaut(scene,groundAt,onFootstep){
     }
     initialized=false;
   }
+  function updateDismount(p,dt,pose,d){
+    updateSeated(p,dt,pose);
+    const t=d.progress,position=exitPosition(d),startQuaternion=root.quaternion.clone(),endQuaternion=new THREE.Quaternion().setFromAxisAngle(UP,d.to.yaw);
+    root.position.set(position.x,position.y,position.z);root.quaternion.slerpQuaternions(startQuaternion,endQuaternion,smooth(t,.15,.8));
+    torso.rotation.x=-Math.sin(t*Math.PI)*.14;torso.rotation.z=d.side*Math.sin(t*Math.PI)*.07;
+    root.updateMatrixWorld(true);inverse.copy(root.matrixWorld).invert();
+    for(const leg of legs){
+      const start=new THREE.Vector3(leg.side*.2,.62,-.80).applyMatrix4(pose.matrix),end=localToWorld(leg.side*.18,0,d.to);end.y=groundAt(end.x,end.z);
+      const u=smooth(t,leg.side===d.side?.08:.24,leg.side===d.side?.82:.98);
+      leg.world.lerpVectors(start,end,u);leg.world.y+=Math.sin(Math.PI*u)*.22;leg.swing=u>0&&u<1;leg.progress=u;solveLeg(leg,{yaw:position.yaw},.98);
+    }
+    for(const arm of arms){
+      const release=smooth(t,0,.42),settle=smooth(t,.65,1),q=new THREE.Quaternion().setFromEuler(new THREE.Euler(-.25*(1-settle),0,arm.side*(.22-.16*settle)));
+      arm.shoulder.quaternion.slerp(q,release);arm.elbow.quaternion.slerp(new THREE.Quaternion().setFromEuler(new THREE.Euler(-.5+.32*settle,0,0)),release);
+    }
+    initialized=false;
+  }
   function dispose(){
     const geometries=new Set(),materials=new Set(),textures=new Set();
     root.traverse(node=>{if(node.geometry)geometries.add(node.geometry);if(node.material)for(const m of Array.isArray(node.material)?node.material:[node.material]){materials.add(m);if(m.map)textures.add(m.map);}});
     geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());root.removeFromParent();
   }
-  return {root,update,updateSeated,dispose,legs,torso,head,visor,handErrors:()=>[...handErrors],materials:{glass,gold}};
+  return {root,update,updateSeated,updateDismount,dispose,legs,torso,head,visor,handErrors:()=>[...handErrors],materials:{glass,gold}};
 }

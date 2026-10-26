@@ -34,9 +34,9 @@ GitHub Pages serves the game files. PeerJS Cloud provides connection signaling, 
 - **3** or the Orbit button: rotate around the entire lunar globe. Scroll all the way out to see the Moon and Earth together.
 - **W A S D** or arrow keys: walk relative to the view. **Shift**: lope. **Space**: jump under lunar gravity.
 - **E** or **Enter buggy**: enter your buggy within about four metres. **Locate my buggy** turns your view toward it; the gold map marker shows its position.
-- While driving: **W / S** accelerate and reverse; **A / D** steer; **Space** brakes; **Shift** raises the speed limit. Stop, then press **E** to exit. You can drive in first person or follow view.
+- While driving: **W / S** accelerate and reverse; **A / D** steer; **Space** brakes; **Shift** raises the speed limit. Stop on the ground, then press **E** to climb out. The 1.65-second animation releases the wheel, turns the body and places the boots beside the buggy; it waits for clear footing. You can drive in first person or follow view.
 - On a touch screen, drag to look or orbit, spread/pinch to zoom, and use the on-screen walk pad.
-- **M**, **ATLAS**, or the local relief map opens the lunar atlas. Search by mission or place, filter by country, select a marker, and choose **Locate on the 3D Moon**.
+- **M**, **ATLAS**, or the local relief map opens the lunar atlas. The **Surface map** opens at your current position. Click clear terrain to pin a destination, or enter signed east/north coordinates. Drag to pan, scroll to zoom, and select **Centre on me** to find yourself. A suggested route and distance appear on the bottom-left mini-map; reaching the pin completes the objective. **Moon atlas** contains the real mission locations, country filters and **Locate on the 3D Moon**.
 - In the atlas, choose **Visit research station** to move to the concept outpost. Walk up the ramp; the two proximity airlocks open automatically. The white square on the local map marks the station.
 - **V** changes views. **H** hides the interface. **Esc** releases mouse look. The **?** button opens the field guide.
 
@@ -53,6 +53,12 @@ Orbital camera distances and Earth–Moon separation use mean body radii and mea
 NASA map source and attribution: [CGI Moon Kit, NASA Scientific Visualization Studio](https://svs.gsfc.nasa.gov/4720/). Three.js source and license: [vendor/THREE-LICENSE.txt](vendor/THREE-LICENSE.txt).
 
 All model, material, and library credits are in [assets/ATTRIBUTION.md](assets/ATTRIBUTION.md). To regenerate the bundled assets from their sources, run `npm run prepare:assets` for NASA maps or `npm run prepare:expedition` for rocks, ground materials, the model loader, and PeerJS. These commands need internet access.
+
+## Navigation and historical flags
+
+Surface pins use local metres in the generated 22 km field area; they do not claim a geographic position in a photographed landing site. Routes use bounded A* search over slope and known obstacle clearance. The route is guidance, not autopilot, and far-away rocks may only be known when their world cells load. The path updates when you stray away, and arrival is reported within three metres. Waypoints are private to your view.
+
+Eight 3D flag exhibits are placed on a nearby historical trail: the six Apollo deployments and the Chang'e 5 and 6 lander-mounted displays. Each global atlas entry links to its historical source and can set a route to the corresponding local exhibit. These are labelled reconstructions, with support bars and static fabric folds; their local positions are not presented as the actual landing coordinates or their appearance as their present condition. The Apollo 11 entry notes the original flag falling during liftoff.
 
 ## Multiplayer movement and contact
 
@@ -76,6 +82,11 @@ npm test
 npm run test:browser
 npm run test:expedition
 npm run test:upgrade
+npm run test:navigation
 ```
 
 Browser checks require Google Chrome and save screenshots in `artifacts/`. The expedition check requires internet access and verifies two real WebRTC peers, movement and buggy state replication, invitation joining, buffered rover playback, seated grip contact, shared physical contact, and departure cleanup. The upgrade check walks through both station airlocks, checks wall collision and atlas controls, and captures desktop/mobile screenshots. GitHub Pages deploys pushes to `main` automatically.
+
+## Deployment history
+
+The failure notification at 09:01 IST on 26 October 2026 was the first attempt of run `40264479504`. Its `configure-pages` step returned `404 Not Found` before Pages was enabled. Attempt 2 succeeded at 09:03 IST, and subsequent deployments succeeded. Check the latest [Pages workflow runs](https://github.com/TharunBabu-05/moon_walker/actions/workflows/pages.yml) rather than an old email when determining current hosting status.

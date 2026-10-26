@@ -58,6 +58,9 @@ try{
   assert.ok(new Set(playback.map(p=>p.x.toFixed(3)+','+p.z.toFixed(3))).size>6,'remote buggy plays intermediate positions');
   assert.ok(playback.every(p=>p.errors.every(e=>e<.015)),'remote driver stays attached to wheel');
   await guest.screenshot({path:'artifacts/12-multiplayer-surface.png'});
+  await guest.waitForFunction(()=>selene.snapshot().rover.grounded);await guest.keyboard.press('KeyE');
+  await host.waitForFunction(()=>selene.snapshot().renderedRemotes.some(r=>r.state.dismount?.progress>0&&r.state.dismount.progress<1),{},{timeout:10000});
+  await guest.waitForFunction(()=>!selene.snapshot().riding);await host.waitForFunction(()=>selene.snapshot().renderedRemotes.some(r=>!r.state.riding),{},{timeout:10000});
   // Both users select the same entrance. Contact resolution must separate them.
   await host.locator('#atlas-button').click();await host.locator('#atlas-station').click();
   await guest.locator('#atlas-button').click();await guest.locator('#atlas-station').click();

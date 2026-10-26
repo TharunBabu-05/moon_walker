@@ -18,3 +18,9 @@ export const LUNAR_SITES=[
 ];
 export const mapPoint=(lat,lon)=>({x:(lon+180)/360,y:(90-lat)/180});
 export const coordinateLabel=(lat,lon)=>`${Math.abs(lat).toFixed(4)}° ${lat<0?'S':'N'} · ${Math.abs(lon).toFixed(4)}° ${lon<0?'W':'E'}`;
+const apolloFlagSource='https://www.nasa.gov/the-apollo-program/';
+export const FLAG_EXHIBITS=[
+  ...['tranquility','apollo-12','apollo-14','apollo-15','apollo-16','apollo-17'].map((siteId,i)=>({id:'flag-'+siteId,siteId,x:-52+i*13,z:72,country:'United States',design:'us',label:`Apollo ${[11,12,14,15,16,17][i]} flag exhibit`,detail:'Historical reconstruction of an Apollo flag deployment, with a support bar and static fabric folds. This exhibit is in the simulated field site; the atlas marker identifies the actual mission location.',source:apolloFlagSource})),
+  {id:'flag-tianchuan',siteId:'tianchuan',x:26,z:72,country:'China',design:'cn',label:'Chang’e 5 flag exhibit',detail:'A reconstruction of a lander-mounted flag display, not an astronaut-planted pole. Chang’e 5 unfurled a Chinese flag before the ascender departed in December 2020.',source:'https://brisbane.china-consulate.gov.cn/eng/zlgxwx/202012/t20201208_140511.htm'},
+  {id:'flag-tianjiang',siteId:'tianjiang',x:39,z:72,country:'China',design:'cn',label:'Chang’e 6 flag exhibit',detail:'A reconstruction of the small lander-mounted flag unfurled on the far side in June 2024. The original flag used basalt-based fabric.',source:'https://www.cnsa.gov.cn/english/n6465652/n6465653/c10573102/content.html'}
+];

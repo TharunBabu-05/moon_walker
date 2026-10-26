@@ -17,7 +17,7 @@ try{
   }
   await page.mouse.move(750,450);await page.mouse.down();await page.mouse.move(1150,610,{steps:15});await page.mouse.up();await page.mouse.wheel(0,-400);await page.waitForTimeout(500);
   await page.screenshot({path:'artifacts/20-driver-ik.png'});
-  await page.locator('#mini-map').click();await page.locator('#atlas-search').fill('Shiv Shakti');
+  await page.locator('#mini-map').click();await page.locator('#atlas-global-tab').click();await page.locator('#atlas-search').fill('Shiv Shakti');
   assert.equal(await page.locator('#atlas-list button').count(),1);
   await page.locator('#atlas-list button').click();assert.match(await page.locator('#site-coordinates').innerText(),/69.3700/);
   await page.locator('#atlas-search').fill('');await page.screenshot({path:'artifacts/21-lunar-atlas.png'});

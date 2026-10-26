@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {GLTFLoader} from '../vendor/loaders/GLTFLoader.js';
 import {hash,randomGenerator,noise} from './terrain.js';
+import {FLAG_EXHIBITS} from './lunar-sites.js';
 
 const CELL=64;
 export async function createRockField(group,renderer,landscape,fallbackMaterial) {
@@ -34,6 +35,7 @@ export async function createRockField(group,renderer,landscape,fallbackMaterial)
   const dummy=new THREE.Object3D(),color=new THREE.Color(),colliders=[],records=[];
   let anchorX=Infinity,anchorZ=Infinity;
   function addRock(x,z,radius,yaw,variant){
+    if(FLAG_EXHIBITS.some(e=>Math.hypot(x-e.x,z-e.z)<3+radius))return;
     if(Math.abs(x+25)<19+radius&&Math.abs(z-28)<20+radius)return;
     // Keep the landing point, instrument and parked buggy unobstructed.
     if(Math.hypot(x,z)<2.7||Math.hypot(x-3,z-2)<3.5||Math.hypot(x+4,z-5)<1)return;
