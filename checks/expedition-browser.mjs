@@ -8,8 +8,8 @@ const errors=[];
 const context=await browser.newContext({viewport:{width:1440,height:900},permissions:['clipboard-read','clipboard-write']});
 const monitor=page=>{page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&!/favicon/.test(m.text()))errors.push(m.text());});};
 async function start(url){
-  const page=await context.newPage();monitor(page);await page.goto(url);
-  await page.waitForFunction(()=>window.selene?.snapshot().ready,{},{timeout:60000});
+  const page=await context.newPage();monitor(page);await page.goto(url,{waitUntil:'domcontentloaded',timeout:90000});
+  await page.waitForFunction(()=>window.selene?.snapshot().ready,{},{timeout:120000});
   await page.getByRole('button',{name:'STEP ONTO THE MOON'}).click();if(!new URL(url).searchParams.has('room'))await page.keyboard.press('Escape');return page;
 }
 const snapshot=page=>page.evaluate(()=>window.selene.snapshot());

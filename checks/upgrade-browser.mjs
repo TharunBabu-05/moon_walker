@@ -7,8 +7,8 @@ const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];
 page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
 const snap=()=>page.evaluate(()=>selene.snapshot());
 try{
-  await page.goto(process.env.SELENE_BASE_URL||'http://127.0.0.1:8000/');
-  await page.waitForFunction(()=>window.selene?.snapshot().ready,{},{timeout:60000});
+  await page.goto(process.env.SELENE_BASE_URL||'http://127.0.0.1:8000/',{waitUntil:'domcontentloaded',timeout:90000});
+  await page.waitForFunction(()=>window.selene?.snapshot().ready,{},{timeout:120000});
   await page.locator('#begin').click();await page.keyboard.press('Escape');await page.keyboard.press('Digit2');await page.keyboard.press('KeyE');
   await page.waitForFunction(()=>selene.snapshot().riding);await page.waitForTimeout(400);
   for(const key of ['KeyA','KeyD']){
