@@ -1,6 +1,6 @@
 import {reconcileContacts} from './contacts.js';
 export const MAX_CREW=8;
-const PREFIX='selene-expedition-6-';
+const PREFIX='selene-expedition-7-';
 const numeric=['x','y','z','vx','vy','vz','yaw','speed','distance'];
 
 export function sanitizeState(value){
@@ -9,6 +9,7 @@ export function sanitizeState(value){
   for(const key of numeric){if(!Number.isFinite(value[key]))return null;p[key]=value[key];}
   if(Math.abs(p.x)>11020||Math.abs(p.z)>11020||Math.abs(p.y)>5000||p.speed<0||p.speed>40)return null;
   p.grounded=!!value.grounded;p.riding=!!value.riding;p.landed=false;p.landingSpeed=0;
+  p.costume=value.costume===2?2:1;
   p.ack=Number.isSafeInteger(value.ack)?value.ack:0;
   if(value.dismount&&p.riding){const d=value.dismount;if(Number.isFinite(d.progress)&&d.progress>=0&&d.progress<=1&&[d.from,d.to].every(v=>v&&['x','y','z','yaw'].every(k=>Number.isFinite(v[k])))&&Math.hypot(d.from.x-d.to.x,d.from.z-d.to.z)<5)p.dismount={progress:d.progress,side:d.side===1?1:-1,from:{...d.from},to:{...d.to}};}
   if(value.rover&&typeof value.rover==='object'){
@@ -78,7 +79,7 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
         if(session!==generation)return;
         if(host){clearTimeout(connectionTimer);phase='connected';message='Expedition open. Copy the invite link for your friends.';notify();}
         else if([...links.values()].some(link=>link.open)){message='Connected. Your crew shares this landing site.';notify();}
-        else attach(peer.connect(PREFIX+code,{reliable:true,serialization:'json',metadata:{name,version:6}}));
+        else attach(peer.connect(PREFIX+code,{reliable:true,serialization:'json',metadata:{name,version:7}}));
       });
       peer.on('connection',link=>{
         if(!host||session!==generation){link.close();return;}
@@ -99,7 +100,7 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
         link.on('open',()=>{
           if(session!==generation){link.close();return;}
           if(host){
-            if(members.size>=MAX_CREW-1||link.metadata?.version!==6){send(link,{type:'rejected',message:'This expedition is full or uses a different game version.'});setTimeout(()=>link.close(),100);return;}
+            if(members.size>=MAX_CREW-1||link.metadata?.version!==7){send(link,{type:'rejected',message:'This expedition is full or uses a different game version.'});setTimeout(()=>link.close(),100);return;}
             links.set(link.peer,link);members.set(link.peer,{name:cleanName(link.metadata?.name),state:null});
             const p=getState(),slot=members.size;
             send(link,{type:'welcome',spawn:{x:p.x+slot*6,z:p.z+7}});

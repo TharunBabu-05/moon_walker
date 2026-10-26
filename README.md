@@ -40,6 +40,10 @@ GitHub Pages serves the game files. PeerJS Cloud provides connection signaling, 
 - In the atlas, choose **Visit research station** to move to the concept outpost. Walk up the ramp; the two proximity airlocks open automatically. The white square on the local map marks the station.
 - **V** changes views. **H** hides the interface. **Esc** releases mouse look. The **?** button opens the field guide.
 
+## Suit costumes
+
+Use the **Costume** button or press **C** to switch between two crew-visible suits. Costume 1 is the original SELENE EVA suit. Costume 2 adds a padded white suit, reflective dark helmet, gold pressure seals, a multi-gauge chest console, reinforced glove cuffs and layered boots. Your selection is saved on this device.
+
 ## Collect lunar samples
 
 Stop on foot and face a loose, hand-sized stone within one metre. A gold ring shows the stone you can reach. The new loose specimens use the same photographed rock materials as the larger formations; fixed boulders and decorative gravel cannot be collected.
@@ -56,7 +60,7 @@ The **Field sampling** panel also provides touch buttons. Each bag holds 12 samp
 
 Thrown stones use 1.62 m/s² gravity, spin, substepped collision, terrain-normal bounce, friction and ballistic impact dust. They collide with terrain, conservative boulder/structure/buggy bounds and other explorers; suit impacts trigger a short recoil animation. This is an approximate game simulation, with spherical stone bounds and procedural character poses, not motion capture, full rigid-body dynamics or a suit-injury simulation. The compact pocket shovel and hand pickup are gameplay adaptations, not a reconstruction of an Apollo sampling procedure.
 
-The host owns reservations, inventory, throws and hit detection. Guests send action requests; nearby stones and action progress are synchronized at 10 Hz and moving stones are interpolated between updates. Two people cannot claim the same stone. Joining or leaving an expedition starts a fresh sample session; bags are not saved across reloads. A departing explorer's held/stored stones return to the ground. Uncollected distant specimens are recycled to bound the active field to 240 objects. Everyone must refresh to **expedition protocol 6** and open a new room after updating.
+The host owns reservations, inventory, throws and hit detection. Guests send action requests; nearby stones and action progress are synchronized at 10 Hz and moving stones are interpolated between updates. Two people cannot claim the same stone. Joining or leaving an expedition starts a fresh sample session; bags are not saved across reloads. A departing explorer's held/stored stones return to the ground. Uncollected distant specimens are recycled to bound the active field to 240 objects. Everyone must refresh to **expedition protocol 7** and open a new room after updating.
 
 ## Surface detail
 

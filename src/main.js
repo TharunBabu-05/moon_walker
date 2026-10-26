@@ -40,10 +40,11 @@ async function start(){
   const station=createStation(scene,terrain.groundAt),groundAt=station.groundAt;
   const flags=createFlagExhibits(scene,groundAt);
   const player=createPlayer(terrain.groundAt),roverState=createRoverState(landscape.groundAt),rover=createRover(scene,landscape.groundAt,roverState);
-  let riding=false,dismount=null;
+  let riding=false,dismount=null,costume=1;try{costume=localStorage.getItem('selene-costume')==='2'?2:1;}catch{}
   let navigation={destination:null,points:[],status:'idle',distance:0,index:0},lastPlan=0;
   let footstepCount=0;
   const astronaut=createAstronaut(scene,groundAt,(position,yaw,strength)=>{footstepCount++;if(Math.abs(position.y-terrain.groundAt(position.x,position.z))<.1)terrain.footstep(position,yaw,strength);});
+  astronaut.setCostume(costume);
   const sampleRig=createSampleRig(astronaut,terrain.sampleMesh);
   astronaut.update(player,0);astronaut.root.visible=false;
 
@@ -68,7 +69,7 @@ async function start(){
   function drawMap(){
     const mapSpan=navigation.status==='ready'?clamp(Math.ceil(navigation.distance*3/100)*100,150,500):500;
     $('map-scale').textContent=mapSpan+' M';
-    if(Math.hypot(player.x-mapX,player.z-mapZ)>2||previousMapSpan!==mapSpan){
+    if(Math.hypot(player.x-mapX,player.z-mapZ)>Math.max(8,mapSpan/18)||previousMapSpan!==mapSpan){
       previousMapSpan=mapSpan;
       mapX=player.x;mapZ=player.z;const image=reliefCtx.createImageData(120,80);
       for(let y=0;y<80;y++)for(let x=0;x<120;x++){
@@ -96,7 +97,7 @@ async function start(){
   const remotes=new Map();let rosterSignature='',sampling,pendingSampleUntil=0;
   const localState=()=>{
     const active=started&&mode!=='orbit'&&!modalOpen()&&!document.hidden;
-    return {...player,riding,dismount:dismount?{...dismount}:undefined,vx:active?player.vx:0,vz:active?player.vz:0,vy:active?player.vy:0,speed:active?player.speed:0,rover:{...roverState,vx:active&&riding?roverState.vx:0,vz:active&&riding?roverState.vz:0,vy:active&&riding?roverState.vy:0,speed:active&&riding?roverState.speed:0}};
+    return {...player,costume,riding,dismount:dismount?{...dismount}:undefined,vx:active?player.vx:0,vz:active?player.vz:0,vy:active?player.vy:0,speed:active?player.speed:0,rover:{...roverState,vx:active&&riding?roverState.vx:0,vz:active&&riding?roverState.vz:0,vy:active&&riding?roverState.vy:0,speed:active&&riding?roverState.speed:0}};
   };
   const expedition=createExpedition({
     getState:localState,
@@ -126,7 +127,7 @@ async function start(){
         if(!member.state)continue;
         let remote=remotes.get(member.id);
         if(!remote){
-          const avatar=createAstronaut(scene,groundAt,()=>{});avatar.materials.glass.envMap=astronaut.materials.glass.envMap;avatar.materials.gold.envMap=astronaut.materials.gold.envMap;
+          const avatar=createAstronaut(scene,groundAt,()=>{});avatar.setCostume(member.state.costume||1);avatar.materials.glass.envMap=astronaut.materials.glass.envMap;avatar.materials.glassTwo.envMap=astronaut.materials.glassTwo.envMap;avatar.materials.glassTwo.envMapIntensity=1.2;avatar.materials.gold.envMap=astronaut.materials.gold.envMap;
           const labelCanvas=document.createElement('canvas');labelCanvas.width=512;labelCanvas.height=64;const c=labelCanvas.getContext('2d');c.fillStyle='rgba(5,14,19,.75)';c.fillRect(0,0,512,64);c.fillStyle='#c5e1dc';c.font='25px monospace';c.textAlign='center';c.fillText(member.name.toUpperCase(),256,41);
           const label=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(labelCanvas),transparent:true,depthTest:true}));label.scale.set(2.5,.3125,1);scene.add(label);
           const rv=createRover(scene,landscape.groundAt,member.state.rover||roverState);
@@ -216,9 +217,17 @@ async function start(){
   $('copy-invite').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(expedition.invite());toast('Invite copied. Send it to your friends and keep this tab open.');}catch{$('invite-link').focus();$('invite-link').select();toast('Select and copy the invite link.');}});
   window.addEventListener('beforeunload',()=>expedition.leave());
   function controls(){
-    $('control-strip').innerHTML=mode==='orbit'?'<span><kbd>DRAG</kbd> Orbit</span><span><kbd>SCROLL</kbd> Zoom</span><span><kbd>1 / 2</kbd> Surface</span>':riding?'<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>E</kbd> Exit</span>':'<span><kbd>W A S D</kbd> Walk</span><span><kbd>SHIFT</kbd> Lope</span><span><kbd>F</kbd> Stone</span><span><kbd>G</kbd> Soil</span><span><kbd>B / T</kbd> Bag / throw</span><span><kbd>V</kbd> View</span>';
+    $('control-strip').innerHTML=mode==='orbit'?'<span><kbd>DRAG</kbd> Orbit</span><span><kbd>SCROLL</kbd> Zoom</span><span><kbd>1 / 2</kbd> Surface</span>':riding?'<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>E</kbd> Exit</span>':'<span><kbd>W A S D</kbd> Walk</span><span><kbd>SHIFT</kbd> Lope</span><span><kbd>F</kbd> Stone</span><span><kbd>G</kbd> Soil</span><span><kbd>B / T</kbd> Bag / throw</span><span><kbd>C</kbd> Costume</span><span><kbd>V</kbd> View</span>';
     $('touch-jump').textContent=riding?'BRAKE':'JUMP';
   }
+  function setCostume(next){
+    costume=next===2?2:1;astronaut.setCostume(costume);$('costume-button').textContent=`COSTUME ${costume}`;
+    $('costume-button').setAttribute('aria-label',`Change astronaut costume. Wearing costume ${costume}. Press C to switch.`);
+    try{localStorage.setItem('selene-costume',String(costume));}catch{}
+    if(started)toast(costume===1?'Costume 1 · SELENE EVA suit':'Costume 2 · gold-trim expedition suit');
+  }
+  $('costume-button').addEventListener('click',()=>setCostume(costume===1?2:1));
+  setCostume(costume);
   function toggleRover(){
     if(!started||mode==='orbit'||dismount)return;
     if(sampling.busy()||sampling.held()||pendingSampleUntil){toast('Finish sampling and put your stone in the bag before driving.');return;}
@@ -314,6 +323,7 @@ async function start(){
     if(event.repeat){keys.add(event.code);return;}
     if(event.code==='Digit1')setMode('first');if(event.code==='Digit2')setMode('follow');if(event.code==='Digit3')setMode('orbit');
     if(event.code==='KeyV'){const list=['first','follow','orbit'];setMode(list[(list.indexOf(mode)+1)%3]);}
+    if(event.code==='KeyC')setCostume(costume===1?2:1);
     if(event.code==='KeyH'){hiddenUI=!hiddenUI;document.body.classList.toggle('ui-hidden',hiddenUI);}
     if(event.code==='KeyE')toggleRover();
     if(event.code==='KeyM')atlas.open();
@@ -410,7 +420,7 @@ async function start(){
 
   // Reflect the actual terrain and sun in the helmet's gold visor.
   updateCamera(.016);
-  const cubeTarget=new THREE.WebGLCubeRenderTarget(128,{generateMipmaps:true,minFilter:THREE.LinearMipmapLinearFilter});const cube=new THREE.CubeCamera(.05,30000,cubeTarget);cube.position.set(player.x,player.y+1.8,player.z);cube.update(renderer,scene);astronaut.materials.glass.envMap=cubeTarget.texture;astronaut.materials.glass.envMapIntensity=.8;astronaut.materials.gold.envMap=cubeTarget.texture;
+  const cubeTarget=new THREE.WebGLCubeRenderTarget(128,{generateMipmaps:true,minFilter:THREE.LinearMipmapLinearFilter});const cube=new THREE.CubeCamera(.05,30000,cubeTarget);cube.position.set(player.x,player.y+1.8,player.z);cube.update(renderer,scene);astronaut.materials.glass.envMap=cubeTarget.texture;astronaut.materials.glass.envMapIntensity=.8;astronaut.materials.glassTwo.envMap=cubeTarget.texture;astronaut.materials.glassTwo.envMapIntensity=1.2;astronaut.materials.gold.envMap=cubeTarget.texture;
   let lastBound=-10;
   function animate(){
     requestAnimationFrame(animate);
@@ -465,6 +475,7 @@ async function start(){
     terrain.updateDust(dt);
     for(const [remoteId,remote] of remotes){
       const p=remote.motion.sample(performance.now())||remote.target;remote.current=p;
+      remote.astronaut.setCostume(p.costume||1);
       remote.astronaut.root.visible=started&&Math.hypot(p.x-player.x,p.z-player.z)<300;
       if(p.rover){remote.rover.root.visible=started&&Math.hypot(p.rover.x-player.x,p.rover.z-player.z)<450;remote.rover.update(p.rover,dt);}else remote.rover.root.visible=false;
       if(p.riding&&p.rover){if(p.dismount)remote.astronaut.updateDismount(p,dt,remote.rover.driverPose(),p.dismount);else remote.astronaut.updateSeated(p,dt,remote.rover.driverPose());}else remote.astronaut.update({...p,sampling:!!sampling.person(remoteId)?.action},dt);
@@ -476,6 +487,6 @@ async function start(){
     uiTime+=dt;if(started&&uiTime>.15){updateHUD();uiTime=0;}
   }
   // Read-only diagnostic snapshot used by the local integration checks.
-  window.selene=Object.freeze({snapshot:()=>({samples:sampling.snapshot(),ready,started,mode,riding,dismount:dismount?{...dismount}:null,navigation:{...navigation,points:navigation.points.map(p=>({...p}))},flagExhibits:flags.exhibits.map(f=>({id:f.id,x:f.x,z:f.z,design:f.design})),avatarPosition:astronaut.root.position.toArray(),handErrors:astronaut.handErrors(),station:station.snapshot(),atlas:atlas.snapshot(),predictedContacts,renderedRemotes:[...remotes.values()].map(r=>({name:r.name,state:r.current,handErrors:r.astronaut.handErrors(),samples:r.motion.samples.length})),rover:{...roverState},network:expedition.snapshot(),remoteCount:remotes.size,nearbyRocks:terrain.rocks.filter(r=>Math.hypot(r.x-player.x,r.z-player.z)<20).map(r=>({...r})),player:{...player},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},orbitDistance:universe.state.distance,targetOrbitDistance:universe.state.targetDistance,moonRadius:MOON_RADIUS,earthDistance:EARTH_DISTANCE,footsteps:footstepCount,feet:astronaut.legs.map(l=>({position:l.world.toArray(),swing:l.swing,kneeQuaternion:l.lower.quaternion.toArray(),hipQuaternion:l.upper.quaternion.toArray()})),fps,ground:groundAt(player.x,player.z),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})});
+  window.selene=Object.freeze({snapshot:()=>({costume,samples:sampling.snapshot(),ready,started,mode,riding,dismount:dismount?{...dismount}:null,navigation:{...navigation,points:navigation.points.map(p=>({...p}))},flagExhibits:flags.exhibits.map(f=>({id:f.id,x:f.x,z:f.z,design:f.design})),avatarPosition:astronaut.root.position.toArray(),handErrors:astronaut.handErrors(),station:station.snapshot(),atlas:atlas.snapshot(),predictedContacts,renderedRemotes:[...remotes.values()].map(r=>({name:r.name,state:r.current,handErrors:r.astronaut.handErrors(),samples:r.motion.samples.length})),rover:{...roverState},network:expedition.snapshot(),remoteCount:remotes.size,nearbyRocks:terrain.rocks.filter(r=>Math.hypot(r.x-player.x,r.z-player.z)<20).map(r=>({...r})),player:{...player},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},orbitDistance:universe.state.distance,targetOrbitDistance:universe.state.targetDistance,moonRadius:MOON_RADIUS,earthDistance:EARTH_DISTANCE,footsteps:footstepCount,feet:astronaut.legs.map(l=>({position:l.world.toArray(),swing:l.swing,kneeQuaternion:l.lower.quaternion.toArray(),hipQuaternion:l.upper.quaternion.toArray()})),fps,ground:groundAt(player.x,player.z),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})});
   animate();
 }

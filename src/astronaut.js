@@ -15,6 +15,9 @@ export function createAstronaut(scene,groundAt,onFootstep){
   const red=new THREE.MeshStandardMaterial({color:0x913f36,roughness:.9});
   const gold=new THREE.MeshPhysicalMaterial({color:0xbe8c35,metalness:.94,roughness:.21,clearcoat:1});
   const glass=new THREE.MeshPhysicalMaterial({color:0x9e7634,metalness:.88,roughness:.18,clearcoat:1,clearcoatRoughness:.08});
+  const glassTwo=new THREE.MeshPhysicalMaterial({color:0x101a22,metalness:.94,roughness:.11,clearcoat:1,clearcoatRoughness:.035});
+  const suitTwo=new THREE.MeshStandardMaterial({color:0xf0eee5,map:fabric,roughness:.96});
+  const costumeParts=[];
   const torso=new THREE.Group();root.add(torso);
   function mesh(parent,geometry,material,pos=[0,0,0],scale=[1,1,1]){const m=new THREE.Mesh(geometry,material);m.position.set(...pos);m.scale.set(...scale);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
   const sphere=(parent,r,mat,pos,scale)=>mesh(parent,new THREE.SphereGeometry(r,20,16),mat,pos,scale);
@@ -57,6 +60,10 @@ export function createAstronaut(scene,groundAt,onFootstep){
     sphere(head,.018,new THREE.MeshBasicMaterial({color:0xe6e6d8}),[s*.225,.065,-.109],[1,1,.3]);
   }
   const antenna=mesh(torso,new THREE.CylinderGeometry(.004,.006,.35,8),metal,[-.21,1.81,.32]);antenna.rotation.z=.1;
+  const visorPadding=mesh(head,new THREE.TorusGeometry(.229,.034,12,48),suitTwo,[0,0,-.065],[1.08,.97,1]);
+  const visorBoltMaterial=new THREE.MeshStandardMaterial({color:0x8a806d,metalness:.7,roughness:.32});
+  for(let i=0;i<10;i++){const a=i*Math.PI/5,b=mesh(head,new THREE.SphereGeometry(.009,8,6),visorBoltMaterial,[Math.cos(a)*.235,Math.sin(a)*.196,-.09]);costumeParts.push(b);}
+  costumeParts.push(visorPadding);
 
   const arms=[];
   for(const s of [-1,1]){
@@ -65,12 +72,17 @@ export function createAstronaut(scene,groundAt,onFootstep){
     mesh(shoulder,new THREE.CapsuleGeometry(.103,.17,8,16),white,[s*.012,-.18,0]);
     for(let i=0;i<4;i++)ring(shoulder,.104,.012,dirty,[s*.014,-.27-i*.013,0]);
     ring(shoulder,.11,.016,red,[s*.008,-.12,0]);
+    costumeParts.push(sphere(shoulder,.151,suitTwo,[0,0,0],[1.13,.88,1.04]));
+    costumeParts.push(ring(shoulder,.114,.022,gold,[s*.015,-.285,0]));
+    costumeParts.push(ring(shoulder,.105,.012,suitTwo,[s*.015,-.303,0]));
     const elbow=new THREE.Group();elbow.position.set(s*.016,-.335,0);shoulder.add(elbow);
     sphere(elbow,.098,dirty,[0,0,0]);
     mesh(elbow,new THREE.CapsuleGeometry(.082,.13,8,16),white,[0,-.16,0]);
     ring(elbow,.084,.018,metal,[0,-.28,0]);
     sphere(elbow,.093,dirty,[0,-.36,-.015],[.86,1.22,.7]);
     sphere(elbow,.04,white,[-s*.065,-.34,-.036],[1,1.5,1]);
+    costumeParts.push(ring(elbow,.092,.024,gold,[0,-.27,0]));
+    costumeParts.push(box(elbow,[.12,.09,.026],suitTwo,[0,-.36,-.086]));
     arms.push({shoulder,elbow,side:s});
   }
   const legs=[];
@@ -88,9 +100,51 @@ export function createAstronaut(scene,groundAt,onFootstep){
     sphere(foot,.11,white,[0,.13,-.01],[1,.85,1.15]);
     box(foot,[.23,.04,.37],dark,[0,.025,-.065]);
     for(let j=0;j<6;j++)box(foot,[.235,.012,.018],dirty,[0,.006,-.215+j*.06]);
+    costumeParts.push(sphere(upper,.145,suitTwo,[0,-.65,-.012],[1.08,.30,1.10]));
+    costumeParts.push(ring(upper,.126,.022,gold,[0,-.34,0]));
+    costumeParts.push(sphere(lower,.116,suitTwo,[0,-.47,-.094],[.78,.37,.52]));
+    costumeParts.push(ring(lower,.102,.022,gold,[0,-.76,0]));
+    costumeParts.push(sphere(foot,.118,suitTwo,[0,.105,-.118],[1.12,.75,1.22]));
+    costumeParts.push(box(foot,[.245,.052,.36],metal,[0,.035,-.068]));
+    for(let j=0;j<4;j++)costumeParts.push(box(foot,[.245,.012,.018],dark,[0,.009,-.20+j*.078]));
     const pos=new THREE.Vector3(s*.18,groundAt(s*.18,0),0);
     legs.push({side:s,upper,lower,foot,world:pos.clone(),from:pos.clone(),target:pos.clone(),swing:false,progress:0});
   }
+  const suitPanel=new THREE.Group();torso.add(suitPanel);
+  mesh(suitPanel,new THREE.CapsuleGeometry(.282,.39,10,24),suitTwo,[0,1.29,-.012],[1.14,1.04,.88]);
+  sphere(suitPanel,.31,suitTwo,[0,.985,-.015],[1.13,.72,.87]);
+  // A chest-mounted life-support control panel, pressure gauges and service couplings.
+  mesh(suitPanel,new THREE.BoxGeometry(.37,.29,.057),metal,[0,1.397,-.279]);
+  mesh(suitPanel,new THREE.BoxGeometry(.335,.255,.036),suitTwo,[0,1.397,-.313]);
+  mesh(suitPanel,new THREE.BoxGeometry(.28,.095,.014),dark,[0,1.48,-.339]);
+  for(let i=0;i<5;i++){
+    const lamp=mesh(suitPanel,new THREE.SphereGeometry(.012,10,8),i<3?gold:metal,[-.092+i*.046,1.48,-.351]);
+    lamp.scale.set(1,.7,.45);
+  }
+  for(const x of [-.105,0,.105]){
+    mesh(suitPanel,new THREE.TorusGeometry(.038,.007,8,20),gold,[x,1.337,-.347]);
+    const dial=mesh(suitPanel,new THREE.CircleGeometry(.030,24),dark,[x,1.337,-.342]);
+    dial.material.side=THREE.DoubleSide;
+    mesh(suitPanel,new THREE.BoxGeometry(.004,.024,.004),suitTwo,[x+.006,1.343,-.358]).rotation.z=-.42;
+  }
+  for(const x of [-.154,.154])for(const y of [1.29,1.51])mesh(suitPanel,new THREE.CylinderGeometry(.012,.012,.009,10),gold,[x,y,-.348]).rotation.x=Math.PI/2;
+  const clothPatch=document.createElement('canvas');clothPatch.width=256;clothPatch.height=96;const pg=clothPatch.getContext('2d');pg.fillStyle='#28343a';pg.fillRect(0,0,256,96);pg.fillStyle='#f2eee2';pg.font='bold 27px monospace';pg.textAlign='center';pg.fillText('SELENE / EVA 02',128,39);pg.font='16px monospace';pg.fillText('LUNAR FIELD CREW',128,68);
+  const patchTexture=new THREE.CanvasTexture(clothPatch);patchTexture.colorSpace=THREE.SRGBColorSpace;
+  mesh(suitPanel,new THREE.PlaneGeometry(.235,.078),new THREE.MeshStandardMaterial({map:patchTexture,roughness:.95}),[0,1.61,-.25]);
+  for(const side of [-1,1]){
+    tube(suitPanel,[[side*.23,1.56,-.18],[side*.25,1.42,-.24],[side*.22,1.18,-.27]],.021,gold);
+    mesh(suitPanel,new THREE.BoxGeometry(.065,.24,.04),metal,[side*.205,1.37,-.25]);
+    for(let i=0;i<4;i++)mesh(suitPanel,new THREE.BoxGeometry(.046,.018,.014),gold,[side*.205,1.46-i*.047,-.276]);
+  }
+  mesh(suitPanel,new THREE.BoxGeometry(.56,.68,.32),suitTwo,[0,1.35,.31]);
+  mesh(suitPanel,new THREE.BoxGeometry(.43,.42,.024),metal,[0,1.36,.481]);
+  for(let i=0;i<7;i++)mesh(suitPanel,new THREE.BoxGeometry(.31,.012,.009),dark,[0,1.52-i*.046,.499]);
+  mesh(suitPanel,new THREE.TorusGeometry(.115,.013,8,32),gold,[0,1.75,.26],[1,.9,1]);
+  for(const side of [-1,1])mesh(suitPanel,new THREE.SphereGeometry(.13,16,12),suitTwo,[side*.34,1.49,0],[1.1,.9,1]);
+  costumeParts.push(suitPanel);costumeParts.push(antenna);
+  let costume=0;
+  function setCostume(id){const next=id===2?2:1;if(costume===next)return;costume=next;suitPanel.visible=costume===2;costumeParts.forEach(p=>p.visible=costume===2);visorFrame.visible=costume===1;antenna.visible=costume===1;visor.material=costume===2?glassTwo:glass;}
+  setCostume(1);
   let time=0,phase=0,bodyY=0,lean=0,landing=0,initialized=false,lastStep=-1,lastDistance=null;
   const inverse=new THREE.Matrix4();
   function localToWorld(x,z,p){return new THREE.Vector3(p.x+Math.cos(p.yaw)*x+Math.sin(p.yaw)*z,0,p.z-Math.sin(p.yaw)*x+Math.cos(p.yaw)*z);}
@@ -225,5 +279,5 @@ export function createAstronaut(scene,groundAt,onFootstep){
     for(const leg of legs){leg.swing=false;solveLeg(leg,p,.98-crouch);}
     if(right)solveHand(1,right);if(left)solveHand(-1,left);
   }
-  return {root,update,updateSeated,updateDismount,samplePose,solveHand,arms,dispose,legs,torso,head,visor,handErrors:()=>[...handErrors],materials:{glass,gold}};
+  return {root,update,updateSeated,updateDismount,samplePose,solveHand,arms,dispose,legs,torso,head,visor,setCostume,get costume(){return costume;},handErrors:()=>[...handErrors],materials:{glass,glassTwo,gold}};
 }

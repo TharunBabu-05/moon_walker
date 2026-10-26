@@ -10,16 +10,23 @@ const rand=(x,z)=>{let n=Math.imul(x,374761393)^Math.imul(z,668265263);n=Math.im
 // Clients send intentions, never their own collision results or inventory counts.
 export class SampleWorld{
   constructor(groundAt,obstacles=()=>[]){this.groundAt=groundAt;this.obstacles=obstacles;this.reset();}
-  reset(){this.time=0;this.serial=0;this.stones=new Map();this.people=new Map();this.cells=new Set();this.events=[];this.seed(0,0);}
+  reset(){this.time=0;this.serial=0;this.stones=new Map();this.people=new Map();this.cells=new Set();this.pendingCells=new Set();this.events=[];this.seed(0,0);}
   add(id,x,z,radius=.065){if(this.stones.has(id)||this.stones.size>=240)return;this.stones.set(id,{id,x,y:this.groundAt(x,z)+radius,z,radius,variant:Math.floor(rand(Math.round(x*31),Math.round(z*31))*3),vx:0,vy:0,vz:0,spin:0,rest:true,owner:null});}
   seed(x,z){
-    // A bounded field of loose hand-sized specimens, separate from fixed boulders.
+    // Queue nearby cells and fill one per call so crossing a cell boundary never
+    // creates a whole new field of terrain queries in a single frame.
     const cx=Math.floor(x/16),cz=Math.floor(z/16);
     for(let ix=cx-1;ix<=cx+1;ix++)for(let iz=cz-1;iz<=cz+1;iz++){
-      const key=ix+':'+iz;if(this.cells.has(key)||this.stones.size>=240||this.cells.size>=2048)continue;this.cells.add(key);
+      const key=ix+':'+iz;if(this.cells.has(key)||this.pendingCells.has(key)||this.stones.size>=240||this.cells.size+this.pendingCells.size>=2048)continue;this.pendingCells.add(key);
+    }
+    const key=this.pendingCells.values().next().value;
+    if(key&&this.stones.size<240&&this.cells.size<2048){
+      this.pendingCells.delete(key);this.cells.add(key);
+      const [ix,iz]=key.split(':').map(Number);let obstacles;
       for(let j=0;j<3;j++){
         const px=(ix+rand(ix*3+j,iz+92))*16,pz=(iz+rand(ix+74,iz*3+j))*16;
-        if(this.obstacles().some(b=>this.contains(b,px,this.groundAt(px,pz)+.1,pz,.2)))continue;
+        obstacles??=this.obstacles();
+        if(obstacles.some(b=>this.contains(b,px,this.groundAt(px,pz)+.1,pz,.2)))continue;
         this.add(key+':'+j,px,pz,.045+rand(ix*9+j,iz-32)*.035);
       }
     }
@@ -102,14 +109,11 @@ export class SampleWorld{
       }
       if(a.progress>=1)person.action=null;
     }
-    const obstacles=this.obstacles();
+    let obstacles;
     for(const r of this.stones.values()){
       if(r.owner)continue;
-      if(r.rest){
-        const floor=this.groundAt(r.x,r.z)+r.radius;
-        if(r.y>floor+.035&&!obstacles.some(b=>this.contains(b,r.x,r.y-.025,r.z,r.radius)))r.rest=false;
-        else continue;
-      }
+      if(r.rest)continue;
+      obstacles??=this.obstacles();
       // Substeps limit travel to < half a stone radius, preventing tunnelling.
       const steps=Math.max(1,Math.ceil(Math.hypot(r.vx,r.vy,r.vz)*dt/(r.radius*.45))),h=dt/steps;
       for(let i=0;i<steps&&!r.rest;i++){
