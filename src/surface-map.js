@@ -1,12 +1,14 @@
+import {createWorkerClient} from './worker-client.js';
 import {mapToWorld,worldToMap,SURFACE_MAP_LIMIT} from './navigation.js';
 export function createSurfaceMap({getState,heightAt,landmarks,onPin}){
   const $=id=>document.getElementById(id),canvas=$('surface-map'),ctx=canvas.getContext('2d'),background=document.createElement('canvas');background.width=180;background.height=115;const bg=background.getContext('2d');
   let center={x:0,z:0},span=500,drag=null,dirty=true;
+  const worker=createWorkerClient();let pending=false,version=0;
   const project=p=>worldToMap(p,center,span,canvas.width,canvas.height);
   function pin(x,z,label='Custom waypoint'){onPin({x:Math.max(-SURFACE_MAP_LIMIT,Math.min(SURFACE_MAP_LIMIT,x)),z:Math.max(-SURFACE_MAP_LIMIT,Math.min(SURFACE_MAP_LIMIT,z)),label});draw();}
   function draw(){
     const state=getState(),player=state.player,navigation=state.navigation;
-    if(dirty){const image=bg.createImageData(180,115);for(let y=0;y<115;y++)for(let x=0;x<180;x++){const p=mapToWorld((x+.5)/180,(y+.5)/115,center,span,180/115),h=heightAt(p.x,p.z),gradient=heightAt(p.x-2,p.z-2)-h,shade=Math.max(20,Math.min(100,45+gradient*8)),contour=Math.abs(h/3-Math.round(h/3))<.065?18:0,i=(y*180+x)*4;image.data[i]=shade+contour;image.data[i+1]=shade+8+contour;image.data[i+2]=shade+11+contour;image.data[i+3]=255;}bg.putImageData(image,0,0);dirty=false;}
+    if(dirty&&!pending){dirty=false;pending=true;const serial=++version;worker.run('relief',{x:center.x,z:center.z,span,width:180,height:115}).then(data=>{if(serial===version)bg.putImageData(new ImageData(data.pixels,180,115),0,0);}).catch(console.error).finally(()=>{pending=false;draw();});}
     ctx.drawImage(background,0,0,canvas.width,canvas.height);ctx.strokeStyle='#afc9d11c';ctx.lineWidth=1;for(let x=0;x<720;x+=72){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,460);ctx.stroke();}for(let y=0;y<460;y+=72){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(720,y);ctx.stroke();}
     const route=navigation.points||[];if(route.length){ctx.strokeStyle='#e5c48a';ctx.lineWidth=3;ctx.setLineDash([9,6]);ctx.beginPath();route.slice(navigation.index||0).forEach((p,i)=>{const q=project(p);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});ctx.stroke();ctx.setLineDash([]);}
     const you=project(player),flagPoints=[];
@@ -15,7 +17,7 @@ export function createSurfaceMap({getState,heightAt,landmarks,onPin}){
     if(navigation.destination){const p=project(navigation.destination);ctx.strokeStyle='#f9d292';ctx.lineWidth=2;ctx.beginPath();ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(p.x-14,p.y);ctx.lineTo(p.x+14,p.y);ctx.moveTo(p.x,p.y-14);ctx.lineTo(p.x,p.y+14);ctx.stroke();}
     const p=project(player);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(-player.yaw);ctx.fillStyle='#d1fff0';ctx.beginPath();ctx.moveTo(0,-11);ctx.lineTo(7,8);ctx.lineTo(0,4);ctx.lineTo(-7,8);ctx.closePath();ctx.fill();ctx.restore();ctx.strokeStyle='#d1fff0';ctx.beginPath();ctx.arc(p.x,p.y,18,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#e1fff2';ctx.font='bold 12px monospace';ctx.fillText('YOU',p.x+24,p.y+4);
     $('surface-position').textContent=`YOU · ${Math.abs(player.x).toFixed(1)} ${player.x>=0?'E':'W'} / ${Math.abs(player.z).toFixed(1)} ${player.z<=0?'N':'S'} m`;$('surface-map-scale').textContent=`${span.toFixed(0)} m across`;
-    $('surface-route-status').textContent=navigation.destination?`${navigation.destination.label} · ${navigation.status==='arrived'?'ARRIVED':navigation.status==='ready'?Math.round(navigation.distance)+' m remaining':navigation.status==='blocked'?'Choose clear ground for your destination':'No walkable route found; try a nearer point'}`:'Click the terrain to set a destination. Drag to pan. Scroll to zoom.';
+    $('surface-route-status').textContent=navigation.destination?`${navigation.destination.label} · ${navigation.status==='arrived'?'ARRIVED':navigation.status==='ready'?Math.round(navigation.distance)+' m remaining':navigation.status==='planning'?'Planning route…':navigation.status==='blocked'?'Choose clear ground for your destination':'No walkable route found; try a nearer point'}`:'Click the terrain to set a destination. Drag to pan. Scroll to zoom.';
     $('surface-clear').disabled=!navigation.destination;
   }
   const pointer=e=>{const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};};

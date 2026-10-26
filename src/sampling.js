@@ -14,6 +14,8 @@ export function createSampling({scene,groundAt,obstacles,makeRock,network,onDust
       if(!p||typeof p.id!=='string'||!Array.isArray(p.bag)||p.bag.length>12||!Number.isFinite(p.soil))return false;
       const a=p.action;
       if(a&&(!Object.hasOwn(SAMPLE_DURATIONS,a.type)||!Number.isFinite(a.progress)||!point(a.origin)||!Number.isFinite(a.origin.yaw)||(a.target&&!point(a.target))))return false;
+      const m=p.mission;
+      if(!m||!Number.isInteger(m.index)||m.index<0||m.index>3||!['available','collect','return','complete'].includes(m.stage)||!Array.isArray(m.rocks)||m.rocks.length>2||!m.rocks.every(id=>typeof id==='string')||!Number.isInteger(m.soil)||m.soil<0||m.soil>2||!Number.isInteger(m.completed)||m.completed<0||m.completed>3)return false;
       return !p.hit||Number.isFinite(p.hit.time)&&Number.isFinite(p.hit.strength);
     };
     if(!data.people.every(validPerson))return;

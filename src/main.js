@@ -15,6 +15,9 @@ import {planRoute,remainingRoute,worldToMap} from './navigation.js';
 import {DISMOUNT_SECONDS,exitPosition} from './dismount.js';
 import {createSampling} from './sampling.js';
 import {createSampleRig} from './sample-rig.js';
+import {createWorkerClient} from './worker-client.js';
+import {createThrowAim} from './throw-aim.js';
+import {MISSIONS,missionAt,SAMPLE_DEPOT} from './missions.js';
 
 const $=id=>document.getElementById(id);
 const canvas=$('scene');
@@ -40,7 +43,7 @@ async function start(){
   const station=createStation(scene,terrain.groundAt),groundAt=station.groundAt;
   const flags=createFlagExhibits(scene,groundAt);
   const player=createPlayer(terrain.groundAt),roverState=createRoverState(landscape.groundAt),rover=createRover(scene,landscape.groundAt,roverState);
-  let riding=false,dismount=null,costume=1;try{costume=localStorage.getItem('selene-costume')==='2'?2:1;}catch{}
+  let riding=false,dismount=null,costume=1,aimingActive=false;try{costume=localStorage.getItem('selene-costume')==='2'?2:1;}catch{}
   let navigation={destination:null,points:[],status:'idle',distance:0,index:0},lastPlan=0;
   let footstepCount=0;
   const astronaut=createAstronaut(scene,groundAt,(position,yaw,strength)=>{footstepCount++;if(Math.abs(position.y-terrain.groundAt(position.x,position.z))<.1)terrain.footstep(position,yaw,strength);});
@@ -66,20 +69,16 @@ async function start(){
   $('load-status').textContent='WASD to walk · 1 / 2 / 3 to change view';$('begin').disabled=false;$('begin').innerHTML='STEP ONTO THE MOON <span>↗</span>';ready=true;
   const map=$('map'),ctx=map.getContext('2d');
   const reliefCanvas=document.createElement('canvas');reliefCanvas.width=120;reliefCanvas.height=80;const reliefCtx=reliefCanvas.getContext('2d');let mapX=Infinity,mapZ=Infinity,previousMapSpan=0;
+  const mapWorker=createWorkerClient(),routeWorker=createWorkerClient();let mapPending=false,routeSerial=0;
   function drawMap(){
     const mapSpan=navigation.status==='ready'?clamp(Math.ceil(navigation.distance*3/100)*100,150,500):500;
     $('map-scale').textContent=mapSpan+' M';
-    if(Math.hypot(player.x-mapX,player.z-mapZ)>Math.max(8,mapSpan/18)||previousMapSpan!==mapSpan){
-      previousMapSpan=mapSpan;
-      mapX=player.x;mapZ=player.z;const image=reliefCtx.createImageData(120,80);
-      for(let y=0;y<80;y++)for(let x=0;x<120;x++){
-        const wx=mapX+(x-60)*mapSpan/120,wz=mapZ+(y-40)*mapSpan/120,h=landscape.heightAt(wx,wz),slope=landscape.heightAt(wx-3,wz-3)-h;
-        const shade=clamp(34+h*.27+slope*5,18,95),index=(y*120+x)*4,contour=Math.abs(h/3-Math.round(h/3))<.08?15:0;
-        image.data[index]=shade+contour;image.data[index+1]=shade+6+contour;image.data[index+2]=shade+9+contour;image.data[index+3]=255;
-      }
-      reliefCtx.putImageData(image,0,0);
+    if(!mapPending&&(Math.hypot(player.x-mapX,player.z-mapZ)>Math.max(8,mapSpan/18)||previousMapSpan!==mapSpan)){
+      mapPending=true;mapWorker.run('relief',{x:player.x,z:player.z,span:mapSpan}).then(data=>{
+        reliefCtx.putImageData(new ImageData(data.pixels,data.width,data.height),0,0);mapX=data.x;mapZ=data.z;previousMapSpan=data.span;
+      }).catch(error=>console.error(error)).finally(()=>mapPending=false);
     }
-    ctx.fillStyle='#172127';ctx.fillRect(0,0,360,240);ctx.drawImage(reliefCanvas,(mapX-player.x)*360/mapSpan,(mapZ-player.z)*360/mapSpan,360,240);ctx.strokeStyle='rgba(170,210,214,.12)';ctx.lineWidth=1;
+    ctx.fillStyle='#172127';ctx.fillRect(0,0,360,240);Number.isFinite(mapX)&&ctx.drawImage(reliefCanvas,(mapX-player.x)*360/mapSpan,(mapZ-player.z)*360/mapSpan,360*previousMapSpan/mapSpan,240*previousMapSpan/mapSpan);ctx.strokeStyle='rgba(170,210,214,.12)';ctx.lineWidth=1;
     for(let x=60;x<360;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,240);ctx.stroke();}
     for(let y=60;y<240;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(360,y);ctx.stroke();}
     const project=p=>worldToMap(p,player,mapSpan,360,240);
@@ -89,6 +88,11 @@ async function start(){
     ctx.strokeStyle='rgba(188,222,215,.35)';ctx.beginPath();ctx.arc(180,120,15,0,Math.PI*2);ctx.stroke();
     const dot=(x,z,color,size)=>{const px=180+(x-player.x)*360/mapSpan,pz=120+(z-player.z)*360/mapSpan;if(px<5||px>355||pz<5||pz>235)return;ctx.fillStyle=color;ctx.fillRect(px-size/2,pz-size/2,size,size);};
     dot(roverState.x,roverState.z,'#d7b678',7);for(const remote of remotes.values())dot(remote.current.x,remote.current.z,'#b8e4d5',5);
+    const mission=sampling?.person(expedition.identity())?.mission,assignment=missionAt(mission);
+    if(assignment&&['collect','return'].includes(mission.stage)){
+      const point=mission.stage==='return'?SAMPLE_DEPOT:assignment;
+      dot(point.x,point.z,'#f4d397',9);
+    }
     dot(-25,28,'#ffffff',10);
     for(const flag of flags.exhibits)dot(flag.x,flag.z,'#cbb58c',4);
   }
@@ -97,7 +101,7 @@ async function start(){
   const remotes=new Map();let rosterSignature='',sampling,pendingSampleUntil=0;
   const localState=()=>{
     const active=started&&mode!=='orbit'&&!modalOpen()&&!document.hidden;
-    return {...player,costume,riding,dismount:dismount?{...dismount}:undefined,vx:active?player.vx:0,vz:active?player.vz:0,vy:active?player.vy:0,speed:active?player.speed:0,rover:{...roverState,vx:active&&riding?roverState.vx:0,vz:active&&riding?roverState.vz:0,vy:active&&riding?roverState.vy:0,speed:active&&riding?roverState.speed:0}};
+    return {...player,costume,aiming:aimingActive,riding,dismount:dismount?{...dismount}:undefined,vx:active?player.vx:0,vz:active?player.vz:0,vy:active?player.vy:0,speed:active?player.speed:0,rover:{...roverState,vx:active&&riding?roverState.vx:0,vz:active&&riding?roverState.vz:0,vy:active&&riding?roverState.vy:0,speed:active&&riding?roverState.speed:0}};
   };
   const expedition=createExpedition({
     getState:localState,
@@ -155,8 +159,19 @@ async function start(){
   });
   sampling=createSampling({scene,groundAt,makeRock:terrain.sampleMesh,network:expedition,onNotice:toast,onDust:p=>terrain.impactDust(new THREE.Vector3(p.x,p.y,p.z)),
     obstacles:()=>[...terrain.colliders,...station.colliders,...flags.colliders,...expedition.sampleEntries().filter(e=>e.state.rover).map(e=>roverBody(e.state.rover,e.id,false))]});
-  function sampleAction(type){
+  const throwAim=createThrowAim(scene,groundAt,()=>[...terrain.colliders,...station.colliders,...flags.colliders,roverBody(roverState,'self',false),...[...remotes].flatMap(([id,r])=>bodiesFor(id,r.current))]);
+  function cancelAim(){aimingActive=false;throwAim.cancel();$('throw-guide').hidden=true;}
+  function beginAim(){
+    if(!started||mode==='orbit'||modalOpen()||riding||dismount||sampling.busy()||pendingSampleUntil)return;
+    if(!sampling.held()){toast('Pick up or retrieve a small stone first.');return;}
+    if(!player.grounded||player.speed>.18){toast('Stop and plant your feet before aiming.');return;}
+    keys.clear();jumpRequested=false;accumulator=0;throwAim.start();aimingActive=true;$('throw-guide').hidden=false;
+    throwAim.update(0,player,mode==='first'?yaw:followYaw,mode==='first'?pitch:clamp(-followPitch+.25,-.35,.9),sampling.person(expedition.identity())?.specimen?.radius);
+  }
+  function releaseAim(){if(!throwAim.active)return;const request=throwAim.release();aimingActive=false;$('throw-guide').hidden=true;if(request)sampleAction('throw',request);}
+  function sampleAction(type,throwRequest){
     if(!started||mode==='orbit'||modalOpen()||riding||dismount)return;
+    if(throwAim.active){cancelAim();}
     if(sampling.busy()||pendingSampleUntil){toast('Finish your current sampling action first.');return;}
     if(player.speed>.18||!player.grounded){toast('Stop walking and plant both boots before sampling.');return;}
     const angle=mode==='first'?yaw:followYaw;
@@ -166,9 +181,14 @@ async function start(){
     const elevation=mode==='first'?pitch:clamp(-followPitch+.25,-.25,.75);
     keys.clear();jumpRequested=false;player.vx=player.vz=player.speed=0;accumulator=0;
     if(!expedition.authority())pendingSampleUntil=performance.now()+1800;
-    expedition.requestSample({type,id:target?.id,direction:{x:-Math.sin(angle)*Math.cos(elevation),y:Math.sin(elevation),z:-Math.cos(angle)*Math.cos(elevation)}});
+    expedition.requestSample({type,id:target?.id,charge:throwRequest?.charge,direction:throwRequest?.direction||{x:-Math.sin(angle)*Math.cos(elevation),y:Math.sin(elevation),z:-Math.cos(angle)*Math.cos(elevation)}});
   }
-  for(const [id,type] of [['sample-pick','pick'],['sample-soil','soil'],['sample-store','store'],['sample-throw','throw'],['sample-retrieve','retrieve']])$(id).onclick=()=>sampleAction(type);
+  for(const [id,type] of [['sample-pick','pick'],['sample-soil','soil'],['sample-store','store'],['sample-retrieve','retrieve']])$(id).onclick=()=>sampleAction(type);
+  const throwButton=$('sample-throw');throwButton.textContent='Hold to aim · T';throwButton.style.touchAction='none';
+  throwButton.addEventListener('pointerdown',event=>{event.preventDefault();beginAim();if(throwAim.active)throwButton.setPointerCapture(event.pointerId);});
+  throwButton.addEventListener('pointerup',releaseAim);throwButton.addEventListener('pointercancel',cancelAim);
+  throwButton.addEventListener('lostpointercapture',()=>{if(throwAim.active)cancelAim();});
+  throwButton.addEventListener('click',event=>{if(event.detail===0)throwAim.active?releaseAim():beginAim();});
   function syncDriver(){Object.assign(player,{x:roverState.x-Math.cos(roverState.yaw)*.39,z:roverState.z+Math.sin(roverState.yaw)*.39,y:roverState.y,yaw:roverState.yaw,vx:roverState.vx,vz:roverState.vz,vy:roverState.vy,speed:roverState.speed,grounded:roverState.grounded,landed:false});}
   let predictedContacts=0;
   function localContacts(){
@@ -187,13 +207,32 @@ async function start(){
     return others.some(b=>contact(body,b));
   }
   function setWaypoint(destination){
+    const serial=++routeSerial;
     if(!destination){navigation={destination:null,points:[],status:'idle',distance:0,index:0};return;}
-    if(!started)$('begin').click();
-    if(mode==='orbit')setMode('follow');
-    const route=planRoute(player,destination,landscape.groundAt,(x,z)=>blockedAt(x,z,riding?1.35:.65,riding));
-    navigation={destination:{...destination},...route,distance:0,index:0};lastPlan=elapsed;Object.assign(navigation,remainingRoute(player,route.points));
+    if(!started)$('begin').click();if(mode==='orbit')setMode('follow');
+    navigation={destination:{...destination},points:[],status:'planning',distance:0,index:0};lastPlan=elapsed;
+    const obstacles=[...terrain.colliders,...station.colliders,...flags.colliders,...(riding?[]:[roverBody(roverState,'self',false)])];
+    routeWorker.run('route',{start:{x:player.x,z:player.z},goal:destination,obstacles,radius:riding?1.35:.65}).then(route=>{
+      if(serial!==routeSerial)return;Object.assign(navigation,route,remainingRoute(player,route.points));
+    }).catch(error=>{if(serial===routeSerial){navigation.status='no-route';toast('Could not plan the route. Pin the destination again.');}console.error(error);});
   }
   $('route-clear').onclick=()=>setWaypoint(null);
+  let missionRouteKey='',missionUIKey='';
+  const missionMarker=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,2.6,8),new THREE.MeshBasicMaterial({color:0xe9c78e,transparent:true,opacity:.8}));scene.add(missionMarker);missionMarker.visible=false;
+  function routeMission(){const state=sampling.person(expedition.identity())?.mission,m=missionAt(state);if(!m||!state||!['collect','return'].includes(state.stage))return;setWaypoint(state.stage==='return'?SAMPLE_DEPOT:{x:m.x,z:m.z,label:m.name+' survey area'});}
+  $('mission-action').onclick=()=>{sampleAction('mission');};$('mission-route').onclick=routeMission;
+  function updateMission(){
+    const state=sampling.person(expedition.identity())?.mission,m=missionAt(state);$('mission-card').hidden=!started||mode==='orbit';if(!state)return;
+    const active=['collect','return'].includes(state.stage),routeKey=state.index+':'+state.stage;
+    if(active&&routeKey!==missionRouteKey){missionRouteKey=routeKey;routeMission();}else if(!active)missionRouteKey='';
+    missionMarker.visible=active&&mode!=='orbit';if(active){const point=state.stage==='return'?SAMPLE_DEPOT:m;missionMarker.position.set(point.x,landscape.groundAt(point.x,point.z)+1.3,point.z);}
+    const uiKey=routeKey+':'+state.rocks.length+':'+state.soil;if(uiKey===missionUIKey)return;missionUIKey=uiKey;
+    $('mission-title').textContent=m?m.name:'Field campaign complete';$('mission-number').textContent=state.completed+' / '+MISSIONS.length+' COMPLETE';
+    $('mission-description').textContent=!m?'All three assignments delivered to the depot. Keep exploring with your crew.':state.stage==='available'?m.brief:state.stage==='return'?'Return to the sample depot outside the research station. Bag your stones, then deliver.':'Collect inside '+m.radius+' m of the gold survey marker. F picks up a stone; B bags it; G scoops soil.';
+    $('mission-progress').textContent=m?Math.min(state.rocks.length,m.rocks)+' / '+m.rocks+' ROCKS · '+Math.min(state.soil,m.soil)+' / '+m.soil+' SOIL':'';
+    $('mission-action').hidden=!m||state.stage==='collect';$('mission-action').textContent=state.stage==='return'?'Deliver samples':'Accept assignment';$('mission-route').hidden=!active;
+  }
+
   const landmarks=[{x:0,z:0,label:'Landing point',short:'LANDING'},{...station.entrance,label:'Research station entrance',short:'STATION'},...flags.exhibits.map((f,i)=>({x:f.x+.5,z:f.z+4,label:f.label,short:(i<6?'A'+[11,12,14,15,16,17][i]:'CE'+(i===6?5:6))+' FLAG',flag:true}))];
   const atlas=createAtlas({getState:()=>({player:{...player},navigation}),heightAt:landscape.heightAt,landmarks,onPin:setWaypoint,onOpen(){if(document.pointerLockElement)document.exitPointerLock();keys.clear();},onOrbit(site){if(!started)$('begin').click();setMode('orbit');universe.focusSite(site);$('orbit-site').textContent=`${site.name} · ${site.mission}`;},onStation(){
     if(!started)$('begin').click();
@@ -217,7 +256,7 @@ async function start(){
   $('copy-invite').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(expedition.invite());toast('Invite copied. Send it to your friends and keep this tab open.');}catch{$('invite-link').focus();$('invite-link').select();toast('Select and copy the invite link.');}});
   window.addEventListener('beforeunload',()=>expedition.leave());
   function controls(){
-    $('control-strip').innerHTML=mode==='orbit'?'<span><kbd>DRAG</kbd> Orbit</span><span><kbd>SCROLL</kbd> Zoom</span><span><kbd>1 / 2</kbd> Surface</span>':riding?'<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>E</kbd> Exit</span>':'<span><kbd>W A S D</kbd> Walk</span><span><kbd>SHIFT</kbd> Lope</span><span><kbd>F</kbd> Stone</span><span><kbd>G</kbd> Soil</span><span><kbd>B / T</kbd> Bag / throw</span><span><kbd>C</kbd> Costume</span><span><kbd>V</kbd> View</span>';
+    $('control-strip').innerHTML=mode==='orbit'?'<span><kbd>DRAG</kbd> Orbit</span><span><kbd>SCROLL</kbd> Zoom</span><span><kbd>1 / 2</kbd> Surface</span>':riding?'<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>E</kbd> Exit</span>':'<span><kbd>W A S D</kbd> Walk</span><span><kbd>SHIFT</kbd> Lope</span><span><kbd>F</kbd> Stone</span><span><kbd>G</kbd> Soil</span><span><kbd>B</kbd> Bag</span><span><kbd>HOLD T</kbd> Aim / throw</span><span><kbd>C</kbd> Costume</span><span><kbd>V</kbd> View</span>';
     $('touch-jump').textContent=riding?'BRAKE':'JUMP';
   }
   function setCostume(next){
@@ -229,6 +268,7 @@ async function start(){
   $('costume-button').addEventListener('click',()=>setCostume(costume===1?2:1));
   setCostume(costume);
   function toggleRover(){
+    cancelAim();
     if(!started||mode==='orbit'||dismount)return;
     if(sampling.busy()||sampling.held()||pendingSampleUntil){toast('Finish sampling and put your stone in the bag before driving.');return;}
     if(riding){
@@ -258,6 +298,7 @@ async function start(){
     try {const promise=canvas.requestPointerLock();if(promise?.catch)promise.catch(()=>{$('resume').hidden=false;});}catch{$('resume').hidden=false;}
   }
   function setMode(next){
+    cancelAim();
     if(!started||next===mode)return;
     if(document.pointerLockElement)document.exitPointerLock();
     const orbitChange=next==='orbit'||mode==='orbit';
@@ -330,13 +371,14 @@ async function start(){
     if(event.code==='KeyF')sampleAction('pick');
     if(event.code==='KeyG')sampleAction('soil');
     if(event.code==='KeyB')sampleAction('store');
-    if(event.code==='KeyT')sampleAction('throw');
+    if(event.code==='KeyT'){event.preventDefault();beginAim();}
+    if(event.code==='Escape')cancelAim();
     if(event.code==='KeyR')sampleAction('retrieve');
     if(event.code==='Space'&&mode!=='orbit')jumpRequested=true;
     keys.add(event.code);
   });
-  document.addEventListener('keyup',event=>keys.delete(event.code));
-  const clearInput=()=>{keys.clear();pointers.clear();jumpRequested=false;accumulator=0;};window.addEventListener('blur',clearInput);document.addEventListener('visibilitychange',()=>{clearInput();clock.getDelta();});
+  document.addEventListener('keyup',event=>{keys.delete(event.code);if(event.code==='KeyT')releaseAim();});
+  const clearInput=()=>{cancelAim();keys.clear();pointers.clear();jumpRequested=false;accumulator=0;};window.addEventListener('blur',clearInput);document.addEventListener('visibilitychange',()=>{clearInput();clock.getDelta();});
   document.querySelectorAll('[data-key]').forEach(button=>{
     button.addEventListener('pointerdown',event=>{event.preventDefault();keys.add(button.dataset.key);button.setPointerCapture(event.pointerId);});
     for(const type of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(type,()=>keys.delete(button.dataset.key));
@@ -387,6 +429,7 @@ async function start(){
     }
   }
   function updateHUD(){
+    updateMission();
     const orbit=mode==='orbit';
     const samples=sampling.person(expedition.identity()),action=samples?.action,near=sampling.nearest(player),stationary=player.grounded&&player.speed<.18;
     $('sample-card').hidden=orbit||riding;
@@ -399,7 +442,7 @@ async function start(){
     $('sample-throw').disabled=!!action||!samples?.held||!stationary;
     $('sample-retrieve').disabled=!!action||!!samples?.held||!samples?.bag.length||!stationary;
     $('route-card').hidden=!navigation.destination||orbit;
-    if(navigation.destination){$('route-name').textContent=navigation.destination.label;$('route-distance').textContent=navigation.status==='arrived'?'ARRIVED · objective reached':navigation.status==='ready'?`${Math.round(navigation.distance)} m remaining · follow the gold route`:navigation.status==='blocked'?'Destination obstructed — choose clear ground':'No walkable route found';}
+    if(navigation.destination){$('route-name').textContent=navigation.destination.label;$('route-distance').textContent=navigation.status==='arrived'?'ARRIVED · objective reached':navigation.status==='ready'?`${Math.round(navigation.distance)} m remaining · follow the gold route`:navigation.status==='planning'?'Planning surface route…':navigation.status==='blocked'?'Destination obstructed — choose clear ground':'No walkable route found';}
     atlas.update();
     if(orbit){
       $('metric-a').innerHTML=(universe.camera.position.distanceTo(universe.moon.position)-MOON_RADIUS).toLocaleString('en',{maximumFractionDigits:0})+' <small>km</small>';
@@ -427,7 +470,7 @@ async function start(){
     const dt=Math.min(clock.getDelta(),.08);expedition.update(performance.now()/1000);if(document.hidden)return;
     elapsed+=dt;frames++;fpsTime+=dt;if(fpsTime>=1){fps=frames/fpsTime;frames=0;fpsTime=0;}
     if(pendingSampleUntil&&performance.now()>pendingSampleUntil){pendingSampleUntil=0;toast('Sampling request timed out. Try again when the host is active.');}
-    if(started&&mode!=='orbit'&&!modalOpen()&&!dismount&&!sampling.busy()&&!pendingSampleUntil){
+    if(started&&mode!=='orbit'&&!modalOpen()&&!dismount&&!throwAim.active&&!sampling.busy()&&!pendingSampleUntil){
       const inputX=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0),inputZ=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);
       const angle=mode==='first'?yaw:followYaw,fast=keys.has('ShiftLeft')||keys.has('ShiftRight');
       const input={x:Math.cos(angle)*inputX-Math.sin(angle)*inputZ,z:-Math.sin(angle)*inputX-Math.cos(angle)*inputZ,fast,jump:jumpRequested};
@@ -456,6 +499,13 @@ async function start(){
         }
       }
     }
+    if(throwAim.active){
+      if(modalOpen()||mode==='orbit'||riding||!sampling.held()||sampling.busy())cancelAim();
+      else{player.vx=player.vz=player.speed=0;player.yaw=mode==='first'?yaw:followYaw;
+        throwAim.update(dt,player,player.yaw,mode==='first'?pitch:clamp(-followPitch+.25,-.35,.9),sampling.person(expedition.identity())?.specimen?.radius);
+        const aim=throwAim.snapshot();$('throw-power').value=aim.charge;$('throw-range').textContent=Math.round(aim.distance||0)+' m · '+(aim.hit||'AIMING');
+      }
+    }
     sampling.update(started?dt:0,{...player,riding},started&&mode!=='orbit');
     const samplePerson=sampling.person(expedition.identity()),task=samplePerson?.action;
     if(task){player.vx=player.vz=player.speed=0;jumpRequested=false;accumulator=0;player.yaw+=angleDelta(player.yaw,task.origin.yaw)*Math.min(1,dt*14);}
@@ -466,7 +516,7 @@ async function start(){
       astronaut.updateDismount({...player,rover:roverState},dt,rover.driverPose(),dismount);
       if(dismount.progress>=1){Object.assign(player,dismount.to,{grounded:true,landed:false});dismount=null;riding=false;keys.clear();accumulator=0;controls();localContacts();toast('Back on foot. E to get back in.');}
     }else if(riding)astronaut.updateSeated({...player,rover:roverState},dt,rover.driverPose());else astronaut.update({...player,sampling:!!task},dt,pitch);
-    sampleRig.update(player,samplePerson,sampling.time());if(!task)player.landed=false;astronaut.root.visible=started&&mode!=='orbit';astronaut.head.visible=mode!=='first';
+    sampleRig.update({...player,aiming:throwAim.active},samplePerson,sampling.time());if(!task)player.landed=false;astronaut.root.visible=started&&mode!=='orbit';astronaut.head.visible=mode!=='first';
     if(navigation.destination&&navigation.status==='ready'){
       Object.assign(navigation,remainingRoute(player,navigation.points));
       if(Math.hypot(player.x-navigation.destination.x,player.z-navigation.destination.z)<3){navigation.status='arrived';navigation.distance=0;toast('Objective reached: '+navigation.destination.label);}
@@ -487,6 +537,6 @@ async function start(){
     uiTime+=dt;if(started&&uiTime>.15){updateHUD();uiTime=0;}
   }
   // Read-only diagnostic snapshot used by the local integration checks.
-  window.selene=Object.freeze({snapshot:()=>({costume,samples:sampling.snapshot(),ready,started,mode,riding,dismount:dismount?{...dismount}:null,navigation:{...navigation,points:navigation.points.map(p=>({...p}))},flagExhibits:flags.exhibits.map(f=>({id:f.id,x:f.x,z:f.z,design:f.design})),avatarPosition:astronaut.root.position.toArray(),handErrors:astronaut.handErrors(),station:station.snapshot(),atlas:atlas.snapshot(),predictedContacts,renderedRemotes:[...remotes.values()].map(r=>({name:r.name,state:r.current,handErrors:r.astronaut.handErrors(),samples:r.motion.samples.length})),rover:{...roverState},network:expedition.snapshot(),remoteCount:remotes.size,nearbyRocks:terrain.rocks.filter(r=>Math.hypot(r.x-player.x,r.z-player.z)<20).map(r=>({...r})),player:{...player},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},orbitDistance:universe.state.distance,targetOrbitDistance:universe.state.targetDistance,moonRadius:MOON_RADIUS,earthDistance:EARTH_DISTANCE,footsteps:footstepCount,feet:astronaut.legs.map(l=>({position:l.world.toArray(),swing:l.swing,kneeQuaternion:l.lower.quaternion.toArray(),hipQuaternion:l.upper.quaternion.toArray()})),fps,ground:groundAt(player.x,player.z),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})});
+  window.selene=Object.freeze({snapshot:()=>({aim:throwAim.snapshot(),streaming:terrain.streaming(),costume,samples:sampling.snapshot(),ready,started,mode,riding,dismount:dismount?{...dismount}:null,navigation:{...navigation,points:navigation.points.map(p=>({...p}))},flagExhibits:flags.exhibits.map(f=>({id:f.id,x:f.x,z:f.z,design:f.design})),avatarPosition:astronaut.root.position.toArray(),handErrors:astronaut.handErrors(),station:station.snapshot(),atlas:atlas.snapshot(),predictedContacts,renderedRemotes:[...remotes.values()].map(r=>({name:r.name,state:r.current,handErrors:r.astronaut.handErrors(),samples:r.motion.samples.length})),rover:{...roverState},network:expedition.snapshot(),remoteCount:remotes.size,nearbyRocks:terrain.rocks.filter(r=>Math.hypot(r.x-player.x,r.z-player.z)<20).map(r=>({...r})),player:{...player},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},orbitDistance:universe.state.distance,targetOrbitDistance:universe.state.targetDistance,moonRadius:MOON_RADIUS,earthDistance:EARTH_DISTANCE,footsteps:footstepCount,feet:astronaut.legs.map(l=>({position:l.world.toArray(),swing:l.swing,kneeQuaternion:l.lower.quaternion.toArray(),hipQuaternion:l.upper.quaternion.toArray()})),fps,ground:groundAt(player.x,player.z),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})});
   animate();
 }

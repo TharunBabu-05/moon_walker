@@ -71,7 +71,12 @@ export function createSampleRig(avatar,makeRock){
       }
       const world=point=>point?point.applyMatrix4(avatar.root.matrixWorld):null;
       avatar.samplePose(p,{crouch,tilt,twist,right:world(right),left:world(left)});
-    }else if(held){const at=samplePoint(p,...idle);avatar.solveHand(1,new THREE.Vector3(at.x,at.y,at.z));}
+    }else if(held){
+      // Holding T raises the specimen into the camera's line of throw, matching
+      // the live trajectory preview before the throw animation begins.
+      const at=samplePoint(p,...(p.aiming?[.34,1.46,-.53]:idle));
+      avatar.solveHand(1,new THREE.Vector3(at.x,at.y,at.z));
+    }
     if(person?.hit){const age=time-person.hit.time;if(age>=0&&age<1.1){const recoil=Math.sin(Math.min(1,age/.18)*Math.PI/2)*Math.exp(-age*4)*person.hit.strength;avatar.torso.rotation.x+=recoil*.20;avatar.torso.rotation.z+=recoil*.12;avatar.head.rotation.x-=recoil*.14;}}
     avatar.root.updateMatrixWorld(true);
     // Keep held props upright in astronaut space, independent of elbow IK rotation.

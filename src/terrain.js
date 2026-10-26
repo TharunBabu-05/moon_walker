@@ -1,62 +1,8 @@
 import * as THREE from 'three';
 import {createRockField} from './rocks.js';
-const TAU=Math.PI*2;
-export function randomGenerator(seed=8419){return()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
-export function hash(x,z){let n=(Math.imul(x|0,374761393)+Math.imul(z|0,668265263))|0;n=Math.imul(n^(n>>>13),1274126177);return ((n^(n>>>16))>>>0)/4294967295;}
-export function noise(x,z){const ix=Math.floor(x),iz=Math.floor(z);let u=x-ix,v=z-iz;u=u*u*(3-2*u);v=v*v*(3-2*v);return THREE.MathUtils.lerp(THREE.MathUtils.lerp(hash(ix,iz),hash(ix+1,iz),u),THREE.MathUtils.lerp(hash(ix,iz+1),hash(ix+1,iz+1),u),v);}
-export function craterRelief(u,r,d,angle=0){
-  if(u>=1.6)return 0;
-  const taper=1-THREE.MathUtils.smoothstep(u,1.35,1.6);
-  const bowl=u<1?-r*d*(1-u*u)**2:0;
-  const rim=r*.064*Math.exp(-(((u-.99)/.105)**2))*(1+.13*Math.sin(angle*19));
-  // Ejecta must join continuously across the rim; a conditional u>1 adds a cliff.
-  const ejecta=r*.013*Math.exp(-(((u-1.12)/.28)**2))*THREE.MathUtils.smoothstep(u,.84,1.08);
-  return (bowl+rim+ejecta+(r>200?r*.028*Math.exp(-u*u*45):0))*taper;
-}
-
-export function createLandscape(){
-  const rng=randomGenerator(71903),craters=[
-    {x:42,z:-138,r:153,d:.19}, {x:116,z:18,r:27,d:.22}, {x:-52,z:-8,r:16,d:.23},
-    {x:-34,z:43,r:7,d:.23}, {x:30,z:13,r:4.2,d:.24}, {x:-7,z:-10,r:2.4,d:.19},
-    {x:-403,z:-320,r:203,d:.14}, {x:570,z:-680,r:310,d:.15}, {x:-910,z:190,r:330,d:.17}
-  ];
-  for(let i=0;i<90;i++){const x=(rng()-.5)*24000,z=(rng()-.5)*24000;if(Math.hypot(x,z)<1400)continue;craters.push({x,z,r:90+rng()**2*1100,d:.12+rng()*.07});}
-  for(let i=0;i<850;i++){const x=(rng()-.5)*2900,z=(rng()-.5)*2900;if(Math.hypot(x,z)<25)continue;craters.push({x,z,r:1.2+rng()**3*35,d:.17+rng()*.09});}
-  for(let i=0;i<100;i++){const x=(rng()-.5)*180,z=(rng()-.5)*180;if(Math.hypot(x,z)<2.5)continue;craters.push({x,z,r:.45+rng()**2*3.2,d:.16+rng()*.10});}
-  const bins=new Map(),cell=128;
-  craters.forEach(c=>{
-    const extent=c.r*1.7;
-    for(let x=Math.floor((c.x-extent)/cell);x<=Math.floor((c.x+extent)/cell);x++)for(let z=Math.floor((c.z-extent)/cell);z<=Math.floor((c.z+extent)/cell);z++){
-      const key=x+','+z;if(!bins.has(key))bins.set(key,[]);bins.get(key).push(c);
-    }
-  });
-  function rawHeightAt(x,z){
-    let h=(noise(x*.00045+11,z*.00045+78)-.5)*220+(noise(x*.0023+7,z*.0023-8)-.5)*48+(noise(x*.009,z*.009)-.5)*8;
-    h+=(noise(x*.043+20,z*.043)-.5)*1.5+(noise(x*.22,z*.22+9)-.5)*.18;
-    h+=(noise(x*1.5+13,z*1.5)-.5)*.045;
-    h-=(x*x+z*z)/(2*1737400);
-    const nearby=bins.get(Math.floor(x/cell)+','+Math.floor(z/cell))||[];
-    for(const c of nearby){
-      const dx=x-c.x,dz=z-c.z,a=Math.atan2(dz,dx),d=Math.hypot(dx,dz);
-      const radius=c.r*(1+.025*Math.sin(a*7+c.x)+.017*Math.sin(a*13));const u=d/radius;
-      h+=craterRelief(u,c.r,c.d,a);
-    }
-    return h;
-  }
-  const padHeight=rawHeightAt(-25,28);
-  function heightAt(x,z){
-    const d=Math.hypot((x+25)/20,(z-28)/22);
-    const blend=THREE.MathUtils.smoothstep(d,.9,2.5);
-    return THREE.MathUtils.lerp(padHeight,rawHeightAt(x,z),blend);
-  }
-  // Sample exactly the triangle interpolation of the finest (0.5 m) mesh.
-  function groundAt(x,z){
-    const step=.5,x0=Math.floor(x/step)*step,z0=Math.floor(z/step)*step,u=(x-x0)/step,v=(z-z0)/step;
-    const a=heightAt(x0,z0),b=heightAt(x0+step,z0),c=heightAt(x0,z0+step),d=heightAt(x0+step,z0+step);
-    return u+v<=1?a+(b-a)*u+(c-a)*v:d+(c-d)*(1-u)+(b-d)*(1-v);
-  }
-  return {heightAt,groundAt,craters};
-}
+import {randomGenerator,noise} from './landscape.js';
+import {createWorkerClient} from './worker-client.js';
+export {randomGenerator,hash,noise,craterRelief,createLandscape} from './landscape.js';
 
 function makeRegolith(renderer){
   const size=1024,rng=randomGenerator(1042),relief=new Float32Array(size*size),color=new Uint8Array(size*size*4),normal=new Uint8Array(size*size*4);
@@ -112,25 +58,18 @@ export async function buildTerrain(scene,renderer,landscape){
     const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(positions,3));geo.setAttribute('color',new THREE.BufferAttribute(colors,3));geo.setAttribute('uv',new THREE.BufferAttribute(uv,2));geo.setIndex(indices);
     const mesh=new THREE.Mesh(geo,material);mesh.receiveShadow=true;mesh.castShadow=level<5;group.add(mesh);rings.push({geo,mesh,step,n});
   }
-  let anchorX=Infinity,anchorZ=Infinity;
-  function update(x,z){
-    const cx=Math.round(x/32)*32,cz=Math.round(z/32)*32;if(cx===anchorX&&cz===anchorZ)return;
-    anchorX=cx;anchorZ=cz;
-    for(const {geo,step,n} of rings){
-      const p=geo.attributes.position.array,c=geo.attributes.color.array,uv=geo.attributes.uv.array;
-      for(let iz=0;iz<=n;iz++)for(let ix=0;ix<=n;ix++){
-        const i=iz*(n+1)+ix,wx=cx+(ix-n/2)*step,wz=cz+(iz-n/2)*step;
-        let y=heightAt(wx,wz);
-        // Fine ring edge vertices follow the adjacent coarse edge exactly.
-        if((ix===0||ix===n)&&iz%2)y=(heightAt(wx,wz-step)+heightAt(wx,wz+step))/2;
-        if((iz===0||iz===n)&&ix%2)y=(heightAt(wx-step,wz)+heightAt(wx+step,wz))/2;
-        p[i*3]=wx;p[i*3+1]=y;p[i*3+2]=wz;uv[i*2]=wx/3.5;uv[i*2+1]=-wz/3.5;
-        const shade=.74+noise(wx*.013+3,wz*.013)*.22+noise(wx*.22,wz*.22)*.10;c[i*3]=c[i*3+1]=c[i*3+2]=shade;
-      }
-      geo.attributes.position.needsUpdate=true;geo.attributes.color.needsUpdate=true;geo.attributes.uv.needsUpdate=true;geo.computeVertexNormals();geo.computeBoundingSphere();
-    }
+  const stream=createWorkerClient();let anchorX=Infinity,anchorZ=Infinity,pending=false,completed=0;
+  function install(data){
+    data.rings.forEach((r,i)=>{const geo=rings[i].geo;for(const [name,array,size] of [['position',r.positions,3],['color',r.colors,3],['uv',r.uv,2],['normal',r.normals,3]]){
+      const attribute=geo.getAttribute(name);if(attribute){attribute.array=array;attribute.needsUpdate=true;}else geo.setAttribute(name,new THREE.BufferAttribute(array,size));
+    }geo.boundingSphere=new THREE.Sphere(new THREE.Vector3(...r.bounds.center),r.bounds.radius);});
+    anchorX=data.cx;anchorZ=data.cz;completed++;
   }
-  update(0,0);
+  install(await stream.run('terrain',{x:0,z:0}));
+  function update(x,z){
+    if(pending||Math.round(x/32)*32===anchorX&&Math.round(z/32)*32===anchorZ)return;
+    pending=true;stream.run('terrain',{x,z}).then(install).catch(error=>console.error(error)).finally(()=>pending=false);
+  }
   const rockMaterial=new THREE.MeshStandardMaterial({color:0x909196,roughness:1,map:textures.map,normalMap:textures.normalMap,normalScale:new THREE.Vector2(1.2,1.2)});
   const rockField=await createRockField(group,renderer,landscape,rockMaterial);
   const dummy=new THREE.Object3D();
@@ -165,5 +104,5 @@ export async function buildTerrain(scene,renderer,landscape){
     }
     dg.attributes.position.needsUpdate=true;dg.attributes.color.needsUpdate=true;
   }
-  return {group,sampleMesh:rockField.sampleMesh,impactDust:p=>footstep(p,0,.8,false,true),groundAt:rockField.groundAt,rockTopAt:rockField.surfaceAt,colliders:rockField.colliders,rocks:rockField.records,update(x,z){update(x,z);rockField.update(x,z);},footstep,wheelTrack:(p,yaw)=>footstep(p,yaw,.5,true),updateDust};
+  return {streaming:()=>({terrainJobs:completed,terrainPending:pending,rocks:rockField.streaming()}),group,sampleMesh:rockField.sampleMesh,impactDust:p=>footstep(p,0,.8,false,true),groundAt:rockField.groundAt,rockTopAt:rockField.surfaceAt,colliders:rockField.colliders,rocks:rockField.records,update(x,z){update(x,z);rockField.update(x,z);},footstep,wheelTrack:(p,yaw)=>footstep(p,yaw,.5,true),updateDust};
 }

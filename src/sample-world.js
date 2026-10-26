@@ -1,4 +1,6 @@
 import {GRAVITY,clamp} from './physics.js';
+import {throwSpeed,containsSample} from './ballistics.js';
+import {newMissionState,missionAt,recordMissionSample,SAMPLE_DEPOT} from './missions.js';
 
 export const SAMPLE_DURATIONS={pick:2.6,soil:5.8,store:1.35,throw:1.35,retrieve:1.2};
 export const RELEASE=.53,GRASP=.48;
@@ -26,18 +28,30 @@ export class SampleWorld{
       for(let j=0;j<3;j++){
         const px=(ix+rand(ix*3+j,iz+92))*16,pz=(iz+rand(ix+74,iz*3+j))*16;
         obstacles??=this.obstacles();
-        if(obstacles.some(b=>this.contains(b,px,this.groundAt(px,pz)+.1,pz,.2)))continue;
+        const floor=this.groundAt(px,pz);
+        if(obstacles.some(b=>this.contains(b,px,floor+.1,pz,.2)))continue;
         this.add(key+':'+j,px,pz,.045+rand(ix*9+j,iz-32)*.035);
       }
     }
     if(!this.stones.has('landing-sample')&&!this.cells.has('starter')){this.cells.add('starter');this.add('landing-sample',.38,-.72,.07);}
   }
-  person(id){if(!this.people.has(id))this.people.set(id,{held:null,bag:[],soil:0,action:null,hit:null});return this.people.get(id);}
+  person(id){if(!this.people.has(id))this.people.set(id,{held:null,bag:[],soil:0,action:null,hit:null,mission:newMissionState()});return this.people.get(id);}
   request(id,p,req){
-    if(!p||!req||!Object.hasOwn(SAMPLE_DURATIONS,req.type))return 'Unknown sampling action.';
+    if(!p||!req||!Object.hasOwn(SAMPLE_DURATIONS,req.type)&&req.type!=='mission')return 'Unknown sampling action.';
     const person=this.person(id);
     if(person.action)return 'Finish your current action first.';
     if(p.riding||p.dismount||!p.grounded||p.speed>.18)return 'Stop on foot with both boots on the ground first.';
+    if(req.type==='mission'){
+      const state=person.mission,m=missionAt(state);if(!m)return 'All three field assignments are complete.';
+      if(state.stage==='available'){state.stage='collect';return null;}
+      if(state.stage!=='return')return 'Collect the requested samples inside the survey circle first.';
+      if(Math.hypot(p.x-SAMPLE_DEPOT.x,p.z-SAMPLE_DEPOT.z)>SAMPLE_DEPOT.radius)return 'Bring the samples to the research station depot.';
+      const stored=state.rocks.filter(key=>person.bag.includes(key));
+      if(stored.length<m.rocks||person.soil<m.soil)return 'Put the assignment stones back in your sample bag before delivery.';
+      for(const key of stored.slice(0,m.rocks)){this.stones.delete(key);person.bag.splice(person.bag.indexOf(key),1);}
+      person.soil-=m.soil;state.index++;state.completed++;state.stage=missionAt(state)?'available':'complete';state.rocks=[];state.soil=0;
+      this.event('mission',{id,name:m.name,x:p.x,y:p.y,z:p.z});return null;
+    }
     const type=req.type,a={type,progress:0,start:this.time,origin:{x:p.x,y:p.y,z:p.z,yaw:p.yaw},target:null};
     if(type==='pick'){
       if(person.held)return 'Your right hand is occupied. Bag or throw the stone first.';
@@ -63,14 +77,14 @@ export class SampleWorld{
         const len=Math.hypot(d.x,d.y,d.z);if(len<.1)return 'Choose a throw direction.';
         const elevation=clamp(Math.asin(clamp(d.y/len,-1,1)),-.35,.9),azimuth=Math.atan2(-d.x,-d.z);
         a.origin.yaw=azimuth;a.direction={x:-Math.sin(azimuth)*Math.cos(elevation),y:Math.sin(elevation),z:-Math.cos(azimuth)*Math.cos(elevation)};
+        a.speed=throwSpeed(req.charge);
       }
     }
     person.action=a;return null;
   }
   event(type,data){this.events.push({serial:++this.serial,time:this.time,type,...data});if(this.events.length>40)this.events.shift();}
   contains(b,x,y,z,r){
-    if(b.state){const p=b.state;if(y+r<p.y||y-r>p.y+b.height)return false;const dx=x-p.x,dz=z-p.z,c=Math.cos(p.yaw||0),s=Math.sin(p.yaw||0);return b.shape==='box'?Math.abs(c*dx-s*dz)<b.hx+r&&Math.abs(s*dx+c*dz)<b.hz+r:Math.hypot(dx,dz)<(b.radius||.34)+r;}
-    return y+r>b.bottom&&y-r<b.top&&Math.hypot(x-b.x,z-b.z)<b.radius+r;
+    return containsSample(b,x,y,z,r);
   }
   step(dt,entries){
     this.time+=dt;const active=new Map(entries.map(e=>[e.id,e.state]));
@@ -98,13 +112,14 @@ export class SampleWorld{
       a.progress=clamp((this.time-a.start)/SAMPLE_DURATIONS[a.type],0,1);
       if(!a.done&&a.progress>=(a.type==='pick'?GRASP:a.type==='throw'?RELEASE:.72)){
         a.done=true;const r=this.stones.get(a.stone);
-        if(a.type==='pick'&&r){r.owner=id;delete r.reserved;person.held=r.id;}
-        if(a.type==='store'&&r){person.bag.push(r.id);person.held=null;}
+        if(a.type==='pick'&&r){r.owner=id;r.sampleOrigin={x:r.x,z:r.z};delete r.reserved;person.held=r.id;}
+        if(a.type==='store'&&r){person.bag.push(r.id);person.held=null;recordMissionSample(person.mission,'rock',r.sampleOrigin||a.origin,r.id);}
         if(a.type==='retrieve'&&r){person.bag.pop();person.held=r.id;}
-        if(a.type==='soil'){person.soil++;this.event('scoop',{...a.target});}
+        if(a.type==='soil'){person.soil++;recordMissionSample(person.mission,'soil',a.target);this.event('scoop',{...a.target});}
         if(a.type==='throw'&&r){
           const at=samplePoint(a.origin,.34,1.52,-.56),d=a.direction;
-          Object.assign(r,at,{vx:d.x*6.5,vy:d.y*6.5,vz:d.z*6.5,owner:null,rest:false,thrower:id,born:this.time,spin:0});person.held=null;
+          Object.assign(r,at,{vx:d.x*a.speed,vy:d.y*a.speed,vz:d.z*a.speed,owner:null,rest:false,thrower:id,born:this.time,spin:0});person.held=null;
+          const m=person.mission;m.rocks=m.rocks.filter(key=>key!==r.id);if(m.stage==='return'&&m.rocks.length<missionAt(m).rocks)m.stage='collect';
         }
       }
       if(a.progress>=1)person.action=null;

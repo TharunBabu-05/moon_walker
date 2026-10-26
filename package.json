@@ -7,9 +7,10 @@
     "start": "node server.mjs",
     "prepare:assets": "node scripts/prepare-assets.mjs",
     "prepare:expedition": "node scripts/prepare-expedition-assets.mjs",
-    "check": "node --check src/main.js && node --check src/terrain.js && node --check src/astronaut.js && node --check src/universe.js && node --check src/physics.js && node --check src/rocks.js && node --check src/rover.js && node --check src/world.js && node --check src/multiplayer.js && node --check src/motion.js && node --check src/contacts.js && node --check src/station.js && node --check src/atlas.js && node --check src/lunar-sites.js && node --check src/navigation.js && node --check src/surface-map.js && node --check src/flags.js && node --check src/dismount.js && node --check src/sample-world.js && node --check src/sample-rig.js && node --check src/sampling.js",
-    "test": "node --test checks/physics.test.mjs checks/expedition.test.mjs checks/upgrade.test.mjs checks/navigation.test.mjs",
+    "check": "node --check src/main.js && node --check src/terrain.js && node --check src/landscape.js && node --check src/surface-worker.js && node --check src/worker-client.js && node --check src/astronaut.js && node --check src/universe.js && node --check src/physics.js && node --check src/rocks.js && node --check src/rover.js && node --check src/world.js && node --check src/multiplayer.js && node --check src/motion.js && node --check src/contacts.js && node --check src/station.js && node --check src/atlas.js && node --check src/lunar-sites.js && node --check src/navigation.js && node --check src/surface-map.js && node --check src/flags.js && node --check src/dismount.js && node --check src/ballistics.js && node --check src/throw-aim.js && node --check src/missions.js && node --check src/sample-world.js && node --check src/sample-rig.js && node --check src/sampling.js",
+    "test": "node --test checks/physics.test.mjs checks/expedition.test.mjs checks/upgrade.test.mjs checks/navigation.test.mjs checks/fieldwork.test.mjs",
     "test:browser": "node checks/browser.mjs",
+    "test:fieldwork": "node checks/fieldwork-browser.mjs",
     "test:expedition": "node checks/expedition-browser.mjs",
     "test:upgrade": "node checks/upgrade-browser.mjs",
     "test:navigation": "node checks/navigation-browser.mjs"

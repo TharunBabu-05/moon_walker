@@ -53,18 +53,22 @@ Stop on foot and face a loose, hand-sized stone within one metre. A gold ring sh
 | **F** | Crouch, pick up a small stone in the right glove, and stand |
 | **B** | Put the held stone in the sample bag |
 | **R** | Take the last stored stone back out |
-| **T** | Wind up and throw toward the view; look up or down to change elevation |
+| **Hold T** | Hold to charge a throw. The live arc shows its ground or obstacle contact; release to throw toward the view. |
 | **G** | Draw the pocket shovel, scoop regolith, pour it into the soil bag and stow the tool |
 
 The **Field sampling** panel also provides touch buttons. Each bag holds 12 samples. Keep both boots planted while sampling; bag a held stone before boarding the buggy. The first-person camera follows the crouch and looks toward the work. Walking uses planted stance feet, terrain-aware knee bends, toe clearance and opposite-arm swing driven by foot placement.
 
-Thrown stones use 1.62 m/s² gravity, spin, substepped collision, terrain-normal bounce, friction and ballistic impact dust. They collide with terrain, conservative boulder/structure/buggy bounds and other explorers; suit impacts trigger a short recoil animation. This is an approximate game simulation, with spherical stone bounds and procedural character poses, not motion capture, full rigid-body dynamics or a suit-injury simulation. The compact pocket shovel and hand pickup are gameplay adaptations, not a reconstruction of an Apollo sampling procedure.
+Thrown stones use 1.62 m/s² gravity, spin, substepped collision, terrain-normal bounce, friction and ballistic impact dust. Holding **T** pauses the explorer, raises the stone, charges its release speed, and draws the same ballistic path used for the actual throw. Stones collide with terrain, conservative boulder/structure/buggy bounds and other explorers; suit impacts trigger a short recoil animation. This is an approximate game simulation, with spherical stone bounds and procedural character poses, not motion capture, full rigid-body dynamics or a suit-injury simulation. The compact pocket shovel and hand pickup are gameplay adaptations, not a reconstruction of an Apollo sampling procedure.
 
-The host owns reservations, inventory, throws and hit detection. Guests send action requests; nearby stones and action progress are synchronized at 10 Hz and moving stones are interpolated between updates. Two people cannot claim the same stone. Joining or leaving an expedition starts a fresh sample session; bags are not saved across reloads. A departing explorer's held/stored stones return to the ground. Uncollected distant specimens are recycled to bound the active field to 240 objects. Everyone must refresh to **expedition protocol 7** and open a new room after updating.
+The host owns reservations, inventory, assignments, throws and hit detection. Guests send action requests; nearby stones and action progress are synchronized at 10 Hz and moving stones are interpolated between updates. Two people cannot claim the same stone. Joining or leaving an expedition starts a fresh sample session; bags are not saved across reloads. A departing explorer's held/stored stones return to the ground. Uncollected distant specimens are recycled to bound the active field to 240 objects. Everyone must refresh to **expedition protocol 8** and open a new room after updating.
+
+## Field assignments
+
+The mission card gives three sequential survey tasks. Accept an assignment, follow the gold marker and mini-map route, then bag the requested stones and soil inside its survey circle. Return to the sample depot outside the research station to deliver each completed assignment. The card, gold world marker and mini-map always show the active collection area or return point.
 
 ## Surface detail
 
-The global lunar body uses NASA Scientific Visualization Studio's LRO Wide Angle Camera natural-colour map and Lunar Orbiter Laser Altimeter elevation product. The walkable highlands are a generated landscape with nested half-metre terrain detail, irregular impact craters, desaturated ground materials, close gravel, and tread marks.
+The global lunar body uses NASA Scientific Visualization Studio's LRO Wide Angle Camera natural-colour map and Lunar Orbiter Laser Altimeter elevation product. The walkable highlands are a generated landscape with nested half-metre terrain detail, irregular impact craters, desaturated ground materials, close gravel, and tread marks. Chunk meshes, rock fields, route planning and relief-map sampling are prepared in workers, so crossing their update boundaries does not rebuild tens of thousands of vertices in the render frame.
 
 Close boulders use three Poly Haven Moon Rock models with 2K colour, normal, and roughness materials. The rocks have real mesh volume, cast shadows, block walking and driving, and support top contact through triangle ray queries. Horizontal collisions use conservative bounds, rather than a full rigid body solver. Rock placement uses fixed world cells, so the crew sees the same formations and they do not move when terrain chunks refresh. Distant rocks use cheaper geometry.
 

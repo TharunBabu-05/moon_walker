@@ -13,6 +13,8 @@ export function createAstronaut(scene,groundAt,onFootstep){
   const dark=new THREE.MeshStandardMaterial({color:0x34373a,roughness:.86});
   const metal=new THREE.MeshStandardMaterial({color:0x9a9fa2,metalness:.68,roughness:.32});
   const red=new THREE.MeshStandardMaterial({color:0x913f36,roughness:.9});
+  const orange=new THREE.MeshStandardMaterial({color:0xc77f35,roughness:.78,metalness:.08});
+  const seal=new THREE.MeshStandardMaterial({color:0x596064,roughness:.58,metalness:.26});
   const gold=new THREE.MeshPhysicalMaterial({color:0xbe8c35,metalness:.94,roughness:.21,clearcoat:1});
   const glass=new THREE.MeshPhysicalMaterial({color:0x9e7634,metalness:.88,roughness:.18,clearcoat:1,clearcoatRoughness:.08});
   const glassTwo=new THREE.MeshPhysicalMaterial({color:0x101a22,metalness:.94,roughness:.11,clearcoat:1,clearcoatRoughness:.035});
@@ -27,6 +29,9 @@ export function createAstronaut(scene,groundAt,onFootstep){
 
   mesh(torso,new THREE.CapsuleGeometry(.27,.35,10,24),white,[0,1.26,0],[1.12,1,.79]);
   sphere(torso,.30,white,[0,1.02,0],[1.05,.68,.83]);
+  // Costume 1 has its own layered pressure shell instead of a smooth placeholder body.
+  ring(torso,.255,.024,seal,[0,1.585,0]);
+  for(let i=0;i<5;i++)ring(torso,.239,.008,dirty,[0,1.075-i*.022,0]);
   box(torso,[.39,.12,.22],dark,[0,1.015,-.12]);
   box(torso,[.15,.10,.025],metal,[0,1.02,-.248]);
   for(const s of [-1,1]){
@@ -47,23 +52,35 @@ export function createAstronaut(scene,groundAt,onFootstep){
   box(torso,[.22,.105,.012],dark,[0,1.42,-.271]);
   for(let i=0;i<3;i++){box(torso,[.04,.022,.015],i===0?red:metal,[-.075+i*.075,1.34,-.273]);}
   for(const x of [-.12,.12])for(const y of [1.31,1.47])sphere(torso,.008,metal,[x,y,-.272]);
+  for(const s of [-1,1]){
+    const coupling=sphere(torso,.031,seal,[s*.273,1.17,-.03]);
+    ring(torso,.039,.006,metal,[s*.273,1.17,-.036]);
+    mesh(torso,new THREE.CylinderGeometry(.012,.012,.058,8),orange,[s*.19,1.02,-.246]).rotation.x=Math.PI/2;
+    coupling.scale.set(1,.72,1);
+  }
   const label=document.createElement('canvas');label.width=256;label.height=128;const lc=label.getContext('2d');lc.fillStyle='#d6d6cf';lc.fillRect(0,0,256,128);lc.fillStyle='#353c40';lc.font='bold 30px monospace';lc.fillText('SELENE',26,54);lc.font='18px monospace';lc.fillText('EVA / 07',36,90);
   mesh(torso,new THREE.PlaneGeometry(.19,.095),new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(label),roughness:.8}),[0,1.55,-.222]);
   ring(torso,.205,.035,metal,[0,1.59,0]);
   const head=new THREE.Group();head.position.set(0,1.81,0);torso.add(head);
   sphere(head,.24,white,[0,0,0],[1.05,1.06,1]);
+  ring(head,.215,.019,seal,[0,-.125,.005]);
   const visor=sphere(head,.215,glass,[0,.008,-.115],[.94,.82,.75]);
   const visorFrame=mesh(head,new THREE.TorusGeometry(.196,.014,10,40),gold,[0,.005,-.207],[1,.84,1]);
   for(const s of [-1,1]){
     box(head,[.065,.09,.11],white,[s*.225,.06,-.03]);
     const lamp=mesh(head,new THREE.CylinderGeometry(.025,.025,.025,12),metal,[s*.225,.065,-.092]);lamp.rotation.x=Math.PI/2;
     sphere(head,.018,new THREE.MeshBasicMaterial({color:0xe6e6d8}),[s*.225,.065,-.109],[1,1,.3]);
+    mesh(head,new THREE.CylinderGeometry(.019,.019,.034,10),seal,[s*.235,-.078,.02]).rotation.z=Math.PI/2;
   }
   const antenna=mesh(torso,new THREE.CylinderGeometry(.004,.006,.35,8),metal,[-.21,1.81,.32]);antenna.rotation.z=.1;
   const visorPadding=mesh(head,new THREE.TorusGeometry(.229,.034,12,48),suitTwo,[0,0,-.065],[1.08,.97,1]);
+  const helmetShell=mesh(head,new THREE.SphereGeometry(.252,24,18),suitTwo,[0,.01,.018],[1.06,1.04,.89]);
+  // Leave the face opening empty; the darker visor is shown through this padded shell.
+  const helmetBrow=mesh(head,new THREE.TorusGeometry(.218,.017,10,44),orange,[0,.015,-.146],[1.01,.82,1]);
+  const helmetCrown=mesh(head,new THREE.BoxGeometry(.115,.042,.13),suitTwo,[0,.202,.015]);
   const visorBoltMaterial=new THREE.MeshStandardMaterial({color:0x8a806d,metalness:.7,roughness:.32});
   for(let i=0;i<10;i++){const a=i*Math.PI/5,b=mesh(head,new THREE.SphereGeometry(.009,8,6),visorBoltMaterial,[Math.cos(a)*.235,Math.sin(a)*.196,-.09]);costumeParts.push(b);}
-  costumeParts.push(visorPadding);
+  costumeParts.push(visorPadding,helmetShell,helmetBrow,helmetCrown);
 
   const arms=[];
   for(const s of [-1,1]){
@@ -72,17 +89,21 @@ export function createAstronaut(scene,groundAt,onFootstep){
     mesh(shoulder,new THREE.CapsuleGeometry(.103,.17,8,16),white,[s*.012,-.18,0]);
     for(let i=0;i<4;i++)ring(shoulder,.104,.012,dirty,[s*.014,-.27-i*.013,0]);
     ring(shoulder,.11,.016,red,[s*.008,-.12,0]);
+    for(let i=0;i<3;i++)ring(shoulder,.098,.006,dirty,[s*.012,-.205-i*.027,0]);
     costumeParts.push(sphere(shoulder,.151,suitTwo,[0,0,0],[1.13,.88,1.04]));
     costumeParts.push(ring(shoulder,.114,.022,gold,[s*.015,-.285,0]));
     costumeParts.push(ring(shoulder,.105,.012,suitTwo,[s*.015,-.303,0]));
+    costumeParts.push(ring(shoulder,.111,.013,orange,[s*.014,-.248,0]));
     const elbow=new THREE.Group();elbow.position.set(s*.016,-.335,0);shoulder.add(elbow);
     sphere(elbow,.098,dirty,[0,0,0]);
     mesh(elbow,new THREE.CapsuleGeometry(.082,.13,8,16),white,[0,-.16,0]);
     ring(elbow,.084,.018,metal,[0,-.28,0]);
+    ring(elbow,.078,.009,seal,[0,-.205,0]);
     sphere(elbow,.093,dirty,[0,-.36,-.015],[.86,1.22,.7]);
     sphere(elbow,.04,white,[-s*.065,-.34,-.036],[1,1.5,1]);
     costumeParts.push(ring(elbow,.092,.024,gold,[0,-.27,0]));
     costumeParts.push(box(elbow,[.12,.09,.026],suitTwo,[0,-.36,-.086]));
+    costumeParts.push(ring(elbow,.084,.010,orange,[0,-.178,0]));
     arms.push({shoulder,elbow,side:s});
   }
   const legs=[];
@@ -92,20 +113,26 @@ export function createAstronaut(scene,groundAt,onFootstep){
     mesh(upper,new THREE.CylinderGeometry(.142,.115,1,18),white,[0,-.5,0]);
     for(let i=0;i<5;i++)ring(upper,.12,.014,dirty,[0,-.86-i*.027,0]);
     ring(upper,.143,.018,red,[0,-.23,0]);
+    ring(upper,.125,.010,seal,[0,-.39,0]);
     mesh(lower,new THREE.CylinderGeometry(.112,.093,1,18),white,[0,-.5,0]);
     sphere(lower,.119,dirty,[0,0,0],[1,.22,1]);
     box(lower,[.13,.21,.028],dirty,[0,-.40,-.1]);
     ring(lower,.1,.018,dirty,[0,-.88,0]);
+    ring(lower,.098,.010,seal,[0,-.31,0]);
     box(foot,[.225,.13,.35],dirty,[0,.08,-.06]);
     sphere(foot,.11,white,[0,.13,-.01],[1,.85,1.15]);
     box(foot,[.23,.04,.37],dark,[0,.025,-.065]);
     for(let j=0;j<6;j++)box(foot,[.235,.012,.018],dirty,[0,.006,-.215+j*.06]);
+    mesh(foot,new THREE.BoxGeometry(.19,.026,.055),metal,[0,.14,-.225]);
     costumeParts.push(sphere(upper,.145,suitTwo,[0,-.65,-.012],[1.08,.30,1.10]));
     costumeParts.push(ring(upper,.126,.022,gold,[0,-.34,0]));
+    costumeParts.push(ring(upper,.123,.012,orange,[0,-.52,0]));
     costumeParts.push(sphere(lower,.116,suitTwo,[0,-.47,-.094],[.78,.37,.52]));
     costumeParts.push(ring(lower,.102,.022,gold,[0,-.76,0]));
+    costumeParts.push(ring(lower,.096,.012,orange,[0,-.57,0]));
     costumeParts.push(sphere(foot,.118,suitTwo,[0,.105,-.118],[1.12,.75,1.22]));
     costumeParts.push(box(foot,[.245,.052,.36],metal,[0,.035,-.068]));
+    costumeParts.push(box(foot,[.195,.045,.10],suitTwo,[0,.145,-.18]));
     for(let j=0;j<4;j++)costumeParts.push(box(foot,[.245,.012,.018],dark,[0,.009,-.20+j*.078]));
     const pos=new THREE.Vector3(s*.18,groundAt(s*.18,0),0);
     legs.push({side:s,upper,lower,foot,world:pos.clone(),from:pos.clone(),target:pos.clone(),swing:false,progress:0});
@@ -113,6 +140,8 @@ export function createAstronaut(scene,groundAt,onFootstep){
   const suitPanel=new THREE.Group();torso.add(suitPanel);
   mesh(suitPanel,new THREE.CapsuleGeometry(.282,.39,10,24),suitTwo,[0,1.29,-.012],[1.14,1.04,.88]);
   sphere(suitPanel,.31,suitTwo,[0,.985,-.015],[1.13,.72,.87]);
+  ring(suitPanel,.272,.028,orange,[0,1.012,0]);
+  ring(suitPanel,.257,.020,seal,[0,1.59,0]);
   // A chest-mounted life-support control panel, pressure gauges and service couplings.
   mesh(suitPanel,new THREE.BoxGeometry(.37,.29,.057),metal,[0,1.397,-.279]);
   mesh(suitPanel,new THREE.BoxGeometry(.335,.255,.036),suitTwo,[0,1.397,-.313]);
@@ -140,7 +169,10 @@ export function createAstronaut(scene,groundAt,onFootstep){
   mesh(suitPanel,new THREE.BoxGeometry(.43,.42,.024),metal,[0,1.36,.481]);
   for(let i=0;i<7;i++)mesh(suitPanel,new THREE.BoxGeometry(.31,.012,.009),dark,[0,1.52-i*.046,.499]);
   mesh(suitPanel,new THREE.TorusGeometry(.115,.013,8,32),gold,[0,1.75,.26],[1,.9,1]);
-  for(const side of [-1,1])mesh(suitPanel,new THREE.SphereGeometry(.13,16,12),suitTwo,[side*.34,1.49,0],[1.1,.9,1]);
+  for(const side of [-1,1]){
+    mesh(suitPanel,new THREE.SphereGeometry(.13,16,12),suitTwo,[side*.34,1.49,0],[1.1,.9,1]);
+    mesh(suitPanel,new THREE.CylinderGeometry(.026,.031,.09,10),orange,[side*.33,1.45,-.23]).rotation.x=Math.PI/2;
+  }
   costumeParts.push(suitPanel);costumeParts.push(antenna);
   let costume=0;
   function setCostume(id){const next=id===2?2:1;if(costume===next)return;costume=next;suitPanel.visible=costume===2;costumeParts.forEach(p=>p.visible=costume===2);visorFrame.visible=costume===1;antenna.visible=costume===1;visor.material=costume===2?glassTwo:glass;}
@@ -172,11 +204,14 @@ export function createAstronaut(scene,groundAt,onFootstep){
     phase+=travelled/(fast?1.45:1.05)*TAU;
     if(p.landed)landing=Math.min(.13,p.landingSpeed*.035);
     landing=damp(landing,0,9,dt);
+    // A deliberate, low-gravity gait: the pelvis shifts over the planted boot,
+    // then the other leg clears the surface. This avoids an in-place leg swing.
     lean=damp(lean,moving?-.07-Math.min(.09,p.speed*.025):0,6,dt);
     const bob=moving&&p.grounded?Math.cos(phase*2)*.018:0;
     bodyY=damp(bodyY,bob-landing,12,dt);
     root.position.set(p.x,p.y,p.z);root.rotation.set(0,p.yaw,0);
-    torso.position.set(0,bodyY+.98*(1-Math.cos(lean)),-.98*Math.sin(lean));torso.rotation.set(lean,moving?Math.sin(phase)*.035:0,moving?Math.sin(phase)*.025:0);
+    const transfer=moving&&p.grounded?Math.sin(phase):0;
+    torso.position.set(transfer*.018,bodyY+.98*(1-Math.cos(lean)),-.98*Math.sin(lean));torso.rotation.set(lean,moving?transfer*.035:0,transfer*.035);
     head.rotation.x=clamp(-lookPitch*.22,-.15,.15);
     root.updateMatrixWorld(true);inverse.copy(root.matrixWorld).invert();
     for(const leg of legs){
@@ -188,9 +223,9 @@ export function createAstronaut(scene,groundAt,onFootstep){
         const neutral=localToWorld(leg.side*.18,0,p);
         const error=Math.hypot(neutral.x-leg.world.x,neutral.z-leg.world.z);
         const other=legs.find(l=>l!==leg);
-        if(!p.sampling&&!leg.swing&&!other.swing&&(error>(moving?.23:.055)||p.landed)&&lastStep!==leg.side){
+        if(!p.sampling&&!leg.swing&&!other.swing&&(error>(moving?.21:.052)||p.landed)&&lastStep!==leg.side){
           leg.from.copy(leg.world);leg.target.copy(neutral);
-          const stride=clamp(p.speed*(fast?.17:.26),.12,.42);
+          const stride=clamp(p.speed*(fast?.18:.28),.12,.46);
           if(moving){leg.target.x+=p.vx/Math.max(.1,p.speed)*stride;leg.target.z+=p.vz/Math.max(.1,p.speed)*stride;}
           leg.target.y=groundAt(leg.target.x,leg.target.z);leg.swing=true;leg.progress=0;lastStep=leg.side;
         }
@@ -199,7 +234,7 @@ export function createAstronaut(scene,groundAt,onFootstep){
           leg.world.lerpVectors(leg.from,leg.target,s);leg.world.y+=Math.sin(t*Math.PI)*(fast?.20:.09);
           if(t===1){leg.swing=false;leg.world.y=groundAt(leg.world.x,leg.world.z);if(!seated)onFootstep(leg.world,p.yaw,fast?1.4:1);}
         }
-        if(!moving&&!other.swing&&error<=.055)lastStep=0;
+        if(!moving&&!other.swing&&error<=.055)lastStep=-1;
       }
     }
     // Lower the pelvis on uneven ground before solving knees: fixed leg lengths,
@@ -209,7 +244,7 @@ export function createAstronaut(scene,groundAt,onFootstep){
     torso.position.y+=pelvis-(.98+bodyY);
     for(const leg of legs)solveLeg(leg,p,pelvis);
     initialized=true;
-    for(const a of arms){const foot=legs.find(l=>l.side===a.side).world.clone().applyMatrix4(inverse);const swing=clamp(foot.z*.95,-.4,.4);a.shoulder.rotation.x=damp(a.shoulder.rotation.x,p.grounded?(moving?swing:0):-.32,8,dt);a.shoulder.rotation.y=0;a.elbow.rotation.y=a.elbow.rotation.z=0;a.shoulder.rotation.z=a.side*(p.grounded?.06:.22);a.elbow.rotation.x=-.18-Math.max(0,-a.shoulder.rotation.x)*.65;}
+    for(const a of arms){const foot=legs.find(l=>l.side===a.side).world.clone().applyMatrix4(inverse);const swing=clamp(foot.z*1.08,-.45,.45);a.shoulder.rotation.x=damp(a.shoulder.rotation.x,p.grounded?(moving?swing:0):-.32,8,dt);a.shoulder.rotation.y=0;a.elbow.rotation.y=a.elbow.rotation.z=0;a.shoulder.rotation.z=a.side*(p.grounded?.07:.22);a.elbow.rotation.x=-.20-Math.max(0,-a.shoulder.rotation.x)*.70;}
     pack.rotation.z=-torso.rotation.z*.3;
   }
   let handErrors=[0,0];

@@ -14,7 +14,7 @@ function blend(a,b,t,seconds){
   }
   out.yaw=a.yaw+angleDelta(a.yaw,b.yaw)*t;
   out.costume=t<.5?(a.costume||1):(b.costume||1);
-  out.grounded=t<.5?a.grounded:b.grounded;out.riding=t<.5?a.riding:b.riding;
+  out.grounded=t<.5?a.grounded:b.grounded;out.riding=t<.5?a.riding:b.riding;out.aiming=t<.5?a.aiming:b.aiming;
   if(a.rover&&b.rover)out.rover=blend(a.rover,b.rover,t,seconds);
   if(a.dismount&&b.dismount)out.dismount={...b.dismount,progress:mix(a.dismount.progress,b.dismount.progress,t)};
   return out;

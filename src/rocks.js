@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {GLTFLoader} from '../vendor/loaders/GLTFLoader.js';
-import {hash,randomGenerator,noise} from './terrain.js';
-import {FLAG_EXHIBITS} from './lunar-sites.js';
+import {hash,randomGenerator,noise} from './landscape.js';
+import {createWorkerClient} from './worker-client.js';
 
 const CELL=64;
 export async function createRockField(group,renderer,landscape,fallbackMaterial) {
@@ -33,50 +33,23 @@ export async function createRockField(group,renderer,landscape,fallbackMaterial)
   const distant=new THREE.InstancedMesh(geo,fallbackMaterial,6000);distant.castShadow=true;distant.receiveShadow=true;group.add(distant);
   const gravel=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,0),fallbackMaterial,5000);gravel.receiveShadow=true;group.add(gravel);
   const dummy=new THREE.Object3D(),color=new THREE.Color(),colliders=[],records=[];
-  let anchorX=Infinity,anchorZ=Infinity;
-  function addRock(x,z,radius,yaw,variant){
-    if(FLAG_EXHIBITS.some(e=>Math.hypot(x-e.x,z-e.z)<3+radius))return;
-    if(Math.abs(x+25)<19+radius&&Math.abs(z-28)<20+radius)return;
-    // Keep the landing point, instrument and parked buggy unobstructed.
-    if(Math.hypot(x,z)<2.7||Math.hypot(x-3,z-2)<3.5||Math.hypot(x+4,z-5)<1)return;
-    const ground=Math.min(landscape.groundAt(x,z),landscape.groundAt(x+radius*.55,z),landscape.groundAt(x-radius*.55,z),landscape.groundAt(x,z+radius*.55),landscape.groundAt(x,z-radius*.55));
-    const bottom=ground-radius*.15;
-    const height=templates[variant].height*radius;
-    const rock={x,z,radius,yaw,variant,bottom,top:bottom+height};records.push(rock);
-    if(radius>.13)colliders.push(rock);
-  }
-  function update(x,z){
-    const cx=Math.floor(x/CELL),cz=Math.floor(z/CELL);
-    if(cx===anchorX&&cz===anchorZ)return;anchorX=cx;anchorZ=cz;records.length=0;colliders.length=0;
-    for(let ix=cx-7;ix<=cx+7;ix++)for(let iz=cz-7;iz<=cz+7;iz++){
-      const rng=randomGenerator((hash(ix+373,iz-99)*0xffffffff)>>>0);
-      for(let i=0;i<23;i++){
-        const wx=(ix+rng())*CELL,wz=(iz+rng())*CELL,radius=.07+rng()**4*1.45;
-        if(Math.hypot(wx-x,wz-z)>440)continue;
-        addRock(wx,wz,radius,rng()*Math.PI*2,Math.floor(rng()*3));
+  const stream=createWorkerClient(),bins=new Map();let anchorX=Infinity,anchorZ=Infinity,pending=false,completed=0;
+  const heights=templates.map(t=>t.height);
+  function install(data){
+    records.length=0;colliders.length=0;bins.clear();
+    for(const r of data.records){records.push(r);if(r.radius<=.13)continue;colliders.push(r);
+      const extent=r.radius*1.08;for(let ix=Math.floor((r.x-extent)/8);ix<=Math.floor((r.x+extent)/8);ix++)for(let iz=Math.floor((r.z-extent)/8);iz<=Math.floor((r.z+extent)/8);iz++){
+        const key=ix+','+iz;if(!bins.has(key))bins.set(key,[]);bins.get(key).push(r);
       }
     }
-    for(const r of [[-3,-5,1.12,.7,0],[6,-12,1.8,2,1],[-13,-22,2.4,1.1,2],[18,-38,3.1,2.5,0]])addRock(...r);
-    const counts=[0,0,0];let farCount=0;
-    for(const r of records){
-      dummy.position.set(r.x,r.bottom,r.z);dummy.rotation.set(0,r.yaw,0);dummy.scale.setScalar(r.radius);dummy.updateMatrix();
-      if(r.radius>.28&&Math.hypot(r.x-x,r.z-z)<90&&counts[r.variant]<240){
-        for(const mesh of templates[r.variant].parts)mesh.setMatrixAt(counts[r.variant],dummy.matrix);
-        counts[r.variant]++;
-      }else if(farCount<distant.instanceMatrix.count){
-        dummy.position.y+=r.radius*.25;dummy.scale.set(r.radius,r.radius*templates[r.variant].height,r.radius);dummy.updateMatrix();distant.setMatrixAt(farCount,dummy.matrix);
-        color.setScalar(.68+hash(Math.round(r.x),Math.round(r.z))*.25);distant.setColorAt(farCount++,color);
-      }
-    }
-    templates.forEach((t,i)=>t.parts.forEach(mesh=>{mesh.count=counts[i];mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();}));
-    distant.count=farCount;distant.instanceMatrix.needsUpdate=true;if(distant.instanceColor)distant.instanceColor.needsUpdate=true;distant.computeBoundingSphere();
-    const rng=randomGenerator(1821+cx*47+cz*331);
-    for(let i=0;i<5000;i++){
-      const wx=(cx+.5)*CELL+(rng()-.5)*150,wz=(cz+.5)*CELL+(rng()-.5)*150,s=.008+rng()**3*.055;
-      dummy.position.set(wx,landscape.groundAt(wx,wz)+s*.15,wz);dummy.rotation.set(rng()*2,rng()*6,rng()*2);dummy.scale.set(s,s*.65,s);dummy.updateMatrix();gravel.setMatrixAt(i,dummy.matrix);
-    }
-    gravel.instanceMatrix.needsUpdate=true;gravel.computeBoundingSphere();
+    templates.forEach((t,i)=>t.parts.forEach(mesh=>{mesh.count=data.counts[i];mesh.instanceMatrix.array=data.near[i];mesh.instanceMatrix.needsUpdate=true;mesh.frustumCulled=false;}));
+    distant.count=data.farCount;distant.instanceMatrix.array=data.far;distant.instanceMatrix.needsUpdate=true;
+    if(distant.instanceColor){distant.instanceColor.array=data.farColors;distant.instanceColor.needsUpdate=true;}
+    else{distant.instanceColor=new THREE.InstancedBufferAttribute(data.farColors,3);distant.instanceColor.needsUpdate=true;}
+    distant.frustumCulled=false;gravel.instanceMatrix.array=data.gravel;gravel.instanceMatrix.needsUpdate=true;gravel.frustumCulled=false;
+    anchorX=data.cx;anchorZ=data.cz;completed++;
   }
+  function update(x,z){if(pending||Math.floor(x/CELL)===anchorX&&Math.floor(z/CELL)===anchorZ)return;pending=true;stream.run('rocks',{x,z,heights}).then(install).catch(error=>console.error(error)).finally(()=>pending=false);}
   const ray=new THREE.Raycaster(),probe=new THREE.Mesh(),down=new THREE.Vector3(0,-1,0);
   function surfaceAt(r,x,z){
     dummy.position.set(r.x,r.bottom,r.z);dummy.rotation.set(0,r.yaw,0);dummy.scale.setScalar(r.radius);dummy.updateMatrix();
@@ -91,13 +64,13 @@ export async function createRockField(group,renderer,landscape,fallbackMaterial)
   // Query the same photographed model triangles that are drawn.
   function groundAt(x,z){
     let y=landscape.groundAt(x,z);
-    for(const r of colliders){
+    for(const r of bins.get(Math.floor(x/8)+','+Math.floor(z/8))||[]){
       if(Math.abs(x-r.x)>r.radius*1.08||Math.abs(z-r.z)>r.radius*1.08)continue;
       y=Math.max(y,surfaceAt(r,x,z));
     }
     return y;
   }
-  update(0,0);
+  install(await stream.run('rocks',{x:0,z:0,heights}));
   function sampleMesh(radius=.065,variant=0){
     const group=new THREE.Group();
     for(const part of templates[variant%templates.length].parts){const m=new THREE.Mesh(part.geometry,part.material);m.castShadow=m.receiveShadow=true;group.add(m);}
@@ -106,5 +79,5 @@ export async function createRockField(group,renderer,landscape,fallbackMaterial)
     for(const m of group.children){m.scale.setScalar(scale);m.position.copy(center).multiplyScalar(-scale);}
     return group;
   }
-  return {update,groundAt,surfaceAt,colliders,records,templates,sampleMesh};
+  return {streaming:()=>({jobs:completed,pending}),update,groundAt,surfaceAt,colliders,records,templates,sampleMesh};
 }
