@@ -2,6 +2,8 @@
 
 A locally run three-dimensional Moon exploration. Walk, lope, and jump across cratered lunar highlands; watch a jointed astronaut place their feet and kick up slowly falling dust; then pull back to the NASA mapped Moon and continue out to the Earth–Moon system.
 
+**Play online:** [SELENE · From dust to orbit](https://tharunbabu-05.github.io/moon_walker/)
+
 ## Run
 
 Install the project dependencies once, prepare the NASA textures, then start the local server:
