@@ -100,6 +100,8 @@ Eight 3D flag exhibits are placed on a nearby historical trail: the six Apollo d
 
 Buggy rock contact uses 0.40 m of chassis clearance and a 0.22 m tyre-step limit. Low stones between the wheel tracks can pass underneath; small bumps beneath a tyre feed the wheel and chassis suspension height. Tilt reduces clearance on the lower side. Larger rocks retain solid collision. These are tuned game approximations rather than a full tyre-deformation simulation.
 
+Each wheel is attached by parallel upper/lower wishbones, a steering knuckle and a telescoping damper inside a seven-turn coil spring. Fixed-length arms constrain hub movement to an arc in the tilted chassis frame. Spring/damper integration smooths rebound, with mechanical travel stops and bounded airborne droop; tyre contact drives compression. This is a constrained visual suspension driven by the existing vehicle physics, not a full multibody force simulation.
+
 The continuous terrain height is enforced as a solid lower bound during movement and after contact corrections. If an explorer or buggy is displaced below it, the game restores surface contact and clears downward velocity, including while menus pause movement. Raised rock tops remain separate from this floor so side contact does not teleport a falling explorer to a boulder's summit. Regression checks cover crater routes, world edges and deliberately displaced bodies; this does not claim exhaustive testing of every position in the procedural landscape.
 
 Remote motion uses sequenced, timestamped snapshots at up to 20 Hz and a 120 ms interpolation buffer. Position interpolation uses velocity; rover steering, chassis pose, wheel travel and the seated driver use the same playback time. Brief gaps extrapolate for at most 100 ms, then freeze instead of continuing indefinitely. Steering-wheel grip targets drive two-bone arm IK.
@@ -123,6 +125,7 @@ npm run test:browser
 npm run test:fieldwork
 npm run test:locomotion
 npm run test:ground-recovery
+npm run test:suspension
 npm run test:hud-audio
 npm run test:expedition
 npm run test:upgrade

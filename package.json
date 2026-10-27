@@ -14,6 +14,7 @@
     "test:fieldwork": "node checks/fieldwork-browser.mjs",
     "test:locomotion": "node checks/locomotion-browser.mjs",
     "test:ground-recovery": "node checks/ground-recovery-browser.mjs",
+    "test:suspension": "node checks/suspension-browser.mjs",
     "test:hud-audio": "node checks/hud-audio-browser.mjs",
     "test:expedition": "node checks/expedition-browser.mjs",
     "test:upgrade": "node checks/upgrade-browser.mjs",
