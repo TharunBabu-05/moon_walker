@@ -7,12 +7,27 @@ export function resolveObstacles(body, obstacles, radius=.32, surfaceAt=null) {
     const dx=body.x-rock.x,dz=body.z-rock.z,limit=radius+rock.radius;
     const distance=Math.hypot(dx,dz);
     if (distance>=limit) continue;
-    if(surfaceAt&&body.y>rock.bottom+.12){
+    if(surfaceAt){
       const surface=surfaceAt(rock,body.x,body.z);
       if(Number.isFinite(surface)&&body.y>=surface-.06)continue;
     }
     const nx=distance>1e-6?dx/distance:1,nz=distance>1e-6?dz/distance:0;
-    body.x+=nx*(limit-distance+.001);body.z+=nz*(limit-distance+.001);
+    let separation=limit-distance+.001;
+    if(surfaceAt){
+      // The circle is only a broad-phase bound. Check the model under the
+      // capsule's footprint before ejecting a walker from empty space.
+      const intersects=(x,z)=>{
+        for(const [ox,oz] of [[0,0],[radius,0],[-radius,0],[0,radius],[0,-radius]]){
+          if(surfaceAt(rock,x+ox,z+oz)>body.y+.08)return true;
+        }
+        return false;
+      };
+      if(!intersects(body.x,body.z))continue;
+      let low=0,high=separation;
+      for(let i=0;i<7;i++){const mid=(low+high)/2;if(intersects(body.x+nx*mid,body.z+nz*mid))low=mid;else high=mid;}
+      separation=high+.001;
+    }
+    body.x+=nx*separation;body.z+=nz*separation;
     const into=body.vx*nx+body.vz*nz;
     if (into<0) {body.vx-=into*nx;body.vz-=into*nz;}
     collided=true;

@@ -4,6 +4,18 @@ import {createPlayer,stepPlayer,FIXED_STEP,GRAVITY,JUMP_SPEED,SURFACE_LIMIT} fro
 import {createLandscape} from '../src/terrain.js';
 const flat=()=>0;
 const idle={x:0,z:0,fast:false,jump:false};
+test('falling beside a tall rock does not teleport boots onto its summit',()=>{
+  const p=createPlayer(flat);Object.assign(p,{y:.4,vy:-.5,grounded:false});
+  stepPlayer(p,idle,FIXED_STEP,()=>2);
+  assert.equal(p.grounded,false);assert.ok(p.y<.4);
+});
+
+test('an airborne approach to a cliff stays outside and lands at its base',()=>{
+  const cliff=x=>x>=.02?2:0,p=createPlayer(cliff);
+  Object.assign(p,{y:.4,vy:-.5,grounded:false,vx:2});
+  for(let i=0;i<180;i++)stepPlayer(p,{...idle,x:1},FIXED_STEP,cliff);
+  assert.ok(p.x<.02);assert.equal(p.y,0);assert.equal(p.grounded,true);
+});
 test('lunar jump follows the expected apex and flight time',()=>{
   const p=createPlayer(flat);stepPlayer(p,{...idle,jump:true},FIXED_STEP,flat);
   let apex=p.y,time=FIXED_STEP;

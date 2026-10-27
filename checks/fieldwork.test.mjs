@@ -8,6 +8,20 @@ import {sanitizeState} from '../src/multiplayer.js';
 
 const flat=()=>0;
 
+test('pickup turns toward a nearby stone regardless of facing; bagging retains the body heading',()=>{
+  const world=new SampleWorld(flat,()=>[]),p={...createPlayer(flat),yaw:Math.PI};
+  const id='pilot',person=world.person(id);
+  assert.equal(world.request(id,p,{type:'pick',id:'landing-sample'}),null);
+  assert.ok(Math.abs(person.action.origin.yaw-Math.atan2(-.38,.72))<1e-9);
+  for(let i=0;i<330;i++)world.step(1/120,[{id,state:p}]);
+  assert.equal(person.held,'landing-sample');assert.equal(person.action,null);
+  p.yaw=1.7;
+  assert.equal(world.request(id,p,{type:'store'}),null);
+  assert.equal(person.action.origin.yaw,1.7);
+  for(let i=0;i<180;i++)world.step(1/120,[{id,state:p}]);
+  assert.equal(person.held,null);assert.deepEqual(person.bag,['landing-sample']);
+});
+
 test('charged throw preview uses the bounded launch speeds used by the authoritative simulation',()=>{
   assert.equal(throwSpeed(0),THROW_MIN_SPEED);
   assert.equal(throwSpeed(1),THROW_MAX_SPEED);

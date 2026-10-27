@@ -22,7 +22,7 @@ export function createSampling({scene,groundAt,obstacles,makeRock,network,onDust
     current=data;received=performance.now();ready=true;
   }
   function person(id){const authoritative=network.authority(),p=authoritative?world.people.get(id):current.people.find(p=>p.id===id);if(!p)return null;const delay=authoritative?0:Math.min(.12,(performance.now()-received)/1000),findStone=stoneId=>authoritative?world.stones.get(stoneId):current.stones.find(r=>r.id===stoneId);return {...p,specimen:p.held?findStone(p.held):null,bagItems:p.bag.map(findStone).filter(Boolean),action:p.action?{...p.action,progress:Math.min(1,p.action.progress+delay/SAMPLE_DURATIONS[p.action.type])}:null};}
-  function nearest(p){let best=null,distance=.95;for(const r of current.stones){if(!r.rest||r.owner||r.reserved||Math.abs(r.y-p.y)>.25)continue;const dx=r.x-p.x,dz=r.z-p.z,d=Math.hypot(dx,dz);if(d<distance&&-Math.sin(p.yaw)*dx-Math.cos(p.yaw)*dz>.1&&Math.abs(Math.cos(p.yaw)*dx-Math.sin(p.yaw)*dz)<.5){distance=d;best=r;}}return best;}
+  function nearest(p){let best=null,distance=.95;for(const r of current.stones){if(!r.rest||r.owner||r.reserved||Math.abs(r.y-p.y)>.25)continue;const d=Math.hypot(r.x-p.x,r.z-p.z);if(d<distance){distance=d;best=r;}}return best;}
   function update(dt,p,visible){
     if(network.authority()){
       accumulator=Math.min(.15,accumulator+dt);const entries=network.sampleEntries();while(accumulator>=1/120){world.step(1/120,entries);accumulator-=1/120;}

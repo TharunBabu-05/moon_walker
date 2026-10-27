@@ -28,12 +28,18 @@ export function stepPlayer(p,input,dt,heightAt) {
   let nz=clamp(p.z+p.vz*dt,-SURFACE_LIMIT,SURFACE_LIMIT);
   const nextHeight=heightAt(nx,nz),distance=Math.hypot(nx-p.x,nz-p.z);
   if(p.grounded&&distance>0&&nextHeight-oldGround>distance*.8){nx=p.x;nz=p.z;p.vx*=.7;p.vz*=.7;}
+  // Stop an airborne body entering a taller surface from its side, including
+  // steep terrain that has no separate rock collider to push it back out.
+  if(!p.grounded&&nextHeight>p.y+.06&&nextHeight>oldGround+.06){nx=p.x;nz=p.z;p.vx=0;p.vz=0;}
   p.x=nx;p.z=nz;
   const ground=heightAt(nx,nz);
   if(p.grounded&&oldGround-ground>.13){p.grounded=false;p.vy=0;}
   if(!p.grounded){
+    const previousY=p.y;
     p.vy-=GRAVITY*dt;p.y+=p.vy*dt;
-    if(p.y<=ground&&p.vy<=0){p.landingSpeed=-p.vy;p.y=ground;p.vy=0;p.grounded=true;p.landed=true;}
+    // A descending boot must cross the top from above. Entering a cliff's
+    // side is a horizontal collision, not permission to snap onto its summit.
+    if(previousY>=ground-.06&&p.y<=ground&&p.vy<=0){p.landingSpeed=-p.vy;p.y=ground;p.vy=0;p.grounded=true;p.landed=true;}
   } else {p.y=ground;p.vy=0;}
   p.speed=Math.hypot(p.vx,p.vz);p.distance+=Math.hypot(p.x-oldX,p.z-oldZ);
   if(p.speed>.05){const target=Math.atan2(-p.vx,-p.vz);p.yaw+=angleDelta(p.yaw,target)*Math.min(1,dt*6);}

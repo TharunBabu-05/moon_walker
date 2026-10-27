@@ -11,6 +11,7 @@
     "test": "node --test checks/physics.test.mjs checks/expedition.test.mjs checks/upgrade.test.mjs checks/navigation.test.mjs checks/fieldwork.test.mjs",
     "test:browser": "node checks/browser.mjs",
     "test:fieldwork": "node checks/fieldwork-browser.mjs",
+    "test:locomotion": "node checks/locomotion-browser.mjs",
     "test:expedition": "node checks/expedition-browser.mjs",
     "test:upgrade": "node checks/upgrade-browser.mjs",
     "test:navigation": "node checks/navigation-browser.mjs"

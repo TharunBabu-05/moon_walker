@@ -160,24 +160,37 @@ async function start(){
   sampling=createSampling({scene,groundAt,makeRock:terrain.sampleMesh,network:expedition,onNotice:toast,onDust:p=>terrain.impactDust(new THREE.Vector3(p.x,p.y,p.z)),
     obstacles:()=>[...terrain.colliders,...station.colliders,...flags.colliders,...expedition.sampleEntries().filter(e=>e.state.rover).map(e=>roverBody(e.state.rover,e.id,false))]});
   const throwAim=createThrowAim(scene,groundAt,()=>[...terrain.colliders,...station.colliders,...flags.colliders,roverBody(roverState,'self',false),...[...remotes].flatMap(([id,r])=>bodiesFor(id,r.current))]);
-  function cancelAim(){aimingActive=false;throwAim.cancel();$('throw-guide').hidden=true;}
+  let aimView=null,throwPending=false;
+  function restoreAimView(){
+    if(!aimView)return;
+    const saved=aimView;aimView=null;throwPending=false;
+    setMode(saved.mode,true);
+    ({yaw,pitch,followYaw,followPitch,followDistance,targetFollowDistance}=saved);
+  }
+  function cancelAim(restore=true){
+    aimingActive=false;throwAim.cancel();$('throw-guide').hidden=true;
+    if(restore)restoreAimView();else{aimView=null;throwPending=false;}
+  }
   function beginAim(){
-    if(!started||mode==='orbit'||modalOpen()||riding||dismount||sampling.busy()||pendingSampleUntil)return;
+    if(!started||mode==='orbit'||modalOpen()||riding||dismount||sampling.busy()||pendingSampleUntil||throwAim.active||throwPending)return;
     if(!sampling.held()){toast('Pick up or retrieve a small stone first.');return;}
     if(!player.grounded||player.speed>.18){toast('Stop and plant your feet before aiming.');return;}
+    aimView={mode,yaw,pitch,followYaw,followPitch,followDistance,targetFollowDistance};
+    if(mode!=='first'){setMode('first',true);yaw=player.yaw;pitch=.12;}
     keys.clear();jumpRequested=false;accumulator=0;throwAim.start();aimingActive=true;$('throw-guide').hidden=false;
     throwAim.update(0,player,mode==='first'?yaw:followYaw,mode==='first'?pitch:clamp(-followPitch+.25,-.35,.9),sampling.person(expedition.identity())?.specimen?.radius);
   }
-  function releaseAim(){if(!throwAim.active)return;const request=throwAim.release();aimingActive=false;$('throw-guide').hidden=true;if(request)sampleAction('throw',request);}
+  function releaseAim(){if(!throwAim.active)return;const request=throwAim.release();aimingActive=false;$('throw-guide').hidden=true;throwPending=true;if(request)sampleAction('throw',request);else restoreAimView();}
   function sampleAction(type,throwRequest){
     if(!started||mode==='orbit'||modalOpen()||riding||dismount)return;
     if(throwAim.active){cancelAim();}
     if(sampling.busy()||pendingSampleUntil){toast('Finish your current sampling action first.');return;}
     if(player.speed>.18||!player.grounded){toast('Stop walking and plant both boots before sampling.');return;}
-    const angle=mode==='first'?yaw:followYaw;
-    player.yaw=angle;player.landed=false;astronaut.update(player,0,pitch);
+    // Orbiting the camera must not turn the explorer away from a sample or bag.
+    const angle=mode==='first'?yaw:player.yaw;
+    player.landed=false;
     const target=sampling.nearest(player);
-    if(type==='pick'&&!target){toast('Face a loose small stone within one metre. The gold ring marks one you can reach.');return;}
+    if(type==='pick'&&!target){toast('Move within one metre of a loose small stone. The gold ring marks one you can reach.');return;}
     const elevation=mode==='first'?pitch:clamp(-followPitch+.25,-.25,.75);
     keys.clear();jumpRequested=false;player.vx=player.vz=player.speed=0;accumulator=0;
     if(!expedition.authority())pendingSampleUntil=performance.now()+1800;
@@ -297,14 +310,14 @@ async function start(){
     if(mode!=='first'||!started||matchMedia('(pointer:coarse)').matches)return;
     try {const promise=canvas.requestPointerLock();if(promise?.catch)promise.catch(()=>{$('resume').hidden=false;});}catch{$('resume').hidden=false;}
   }
-  function setMode(next){
-    cancelAim();
+  function setMode(next,temporary=false){
+    if(!temporary)cancelAim(false);
     if(!started||next===mode)return;
     if(document.pointerLockElement)document.exitPointerLock();
     const orbitChange=next==='orbit'||mode==='orbit';
     if(orbitChange){$('transition').classList.add('active');clearTimeout(transitionTimeout);transitionTimeout=setTimeout(()=>$('transition').classList.remove('active'),210);}
-    if(next==='follow'&&mode==='first')followYaw=yaw;
-    if(next==='first')yaw=followYaw;
+    if(!temporary&&next==='follow'&&mode==='first')followYaw=yaw;
+    if(!temporary&&next==='first')yaw=followYaw;
     mode=next;keys.clear();jumpRequested=false;player.vx=player.vz=0;
     astronaut.root.visible=mode!=='orbit';astronaut.head.visible=mode!=='first';$('rover-card').hidden=mode==='orbit';
     $('reticle').hidden=mode!=='first';$('resume').hidden=mode!=='first';$('mini-map').hidden=mode==='orbit';$('surface-note').hidden=mode==='orbit';$('orbit-tools').hidden=mode!=='orbit';
@@ -318,7 +331,7 @@ async function start(){
     $('metric-a-label').textContent=mode==='orbit'?'Camera altitude':'Ground speed';$('metric-b-label').textContent=mode==='orbit'?'Moon diameter':'Height above ground';$('metric-c-label').textContent=mode==='orbit'?'Reference frame':'Locomotion';
     $('earth-label').hidden=$('moon-label').hidden=true;
     if(mode==='orbit'){universe.preset('moon');toast('Scroll to zoom out. Earth + Moon frames both worlds.');}
-    else if(mode==='follow')toast('Drag to orbit your astronaut. Space to jump.');
+    else if(mode==='follow'&&!temporary)toast('Drag to orbit your astronaut. Space to jump.');
   }
   $('begin').addEventListener('click',()=>{if(!ready)return;started=true;$('welcome').hidden=true;$('hud').hidden=false;$('views').hidden=false;canvas.focus();controls();if(invitedRoom)openCrew();else requestLook();});
   document.querySelector('.brand').addEventListener('click',event=>{event.preventDefault();if(started){if(mode!=='first')setMode('first');toast('1 First person · 2 Astronaut · 3 Orbit');}});
@@ -508,6 +521,7 @@ async function start(){
     }
     sampling.update(started?dt:0,{...player,riding},started&&mode!=='orbit');
     const samplePerson=sampling.person(expedition.identity()),task=samplePerson?.action;
+    if(throwPending&&!task&&!pendingSampleUntil)restoreAimView();
     if(task){player.vx=player.vz=player.speed=0;jumpRequested=false;accumulator=0;player.yaw+=angleDelta(player.yaw,task.origin.yaw)*Math.min(1,dt*14);}
     station.update(dt,[localState(),...[...remotes.values()].map(r=>r.current)]);
     rover.update(roverState,dt);

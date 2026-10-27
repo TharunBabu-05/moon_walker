@@ -57,7 +57,9 @@ export class SampleWorld{
       if(person.held)return 'Your right hand is occupied. Bag or throw the stone first.';
       const r=this.stones.get(req.id);
       if(!r||!r.rest||r.owner||r.reserved||dist(r,p)>.95||Math.abs(r.y-p.y)>.25)return 'Move within one metre of a loose small stone.';
-      const dx=r.x-p.x,dz=r.z-p.z;if(-Math.sin(p.yaw)*dx-Math.cos(p.yaw)*dz<.1||Math.abs(Math.cos(p.yaw)*dx-Math.sin(p.yaw)*dz)>.5)return 'Face the small stone before reaching for it.';
+      // The authority chooses the reach direction, independent of the camera.
+      const dx=r.x-p.x,dz=r.z-p.z;
+      if(Math.hypot(dx,dz)>.12)a.origin.yaw=Math.atan2(-dx,-dz);
       if(this.obstacles().some(b=>this.contains(b,(r.x+p.x)/2,p.y+.25,(r.z+p.z)/2,.13)))return 'The stone is behind an obstacle.';
       r.reserved=id;a.stone=r.id;a.target={x:r.x,y:r.y,z:r.z};
     }else if(type==='soil'){

@@ -4,6 +4,17 @@ import {createRoverState,stepRover,resolveObstacles} from '../src/world.js';
 import {sanitizeState,cleanName} from '../src/multiplayer.js';
 import {FIXED_STEP,createPlayer} from '../src/physics.js';
 const flat=()=>0;
+test('walker collision uses the rock surface instead of rejecting empty space inside its broad bound',()=>{
+  const rock={x:0,z:0,radius:2,bottom:0,top:1};
+  const surface=(_rock,x,z)=>Math.abs(x)<.7&&Math.abs(z)<.7?1:-Infinity;
+  const near={x:1.5,z:0,y:0,vx:-1,vz:0};
+  assert.equal(resolveObstacles(near,[rock],.32,surface),false);
+  const touching={x:.8,z:0,y:0,vx:-1,vz:0};
+  assert.equal(resolveObstacles(touching,[rock],.32,surface),true);
+  assert.ok(touching.x>=1.02&&touching.x<1.1,'push only to the actual edge');
+  const onTop={x:.4,z:0,y:1,vx:0,vz:0};
+  assert.equal(resolveObstacles(onTop,[rock],.32,surface),false);
+});
 test('a body slides around a solid rock and can stand above it',()=>{
   const rock={x:0,z:0,radius:1,bottom:0,top:1.2};
   const p={x:.8,z:.2,y:0,vx:-1,vz:.4};assert.equal(resolveObstacles(p,[rock]),true);

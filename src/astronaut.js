@@ -181,9 +181,12 @@ export function createAstronaut(scene,groundAt,onFootstep){
   const inverse=new THREE.Matrix4();
   function localToWorld(x,z,p){return new THREE.Vector3(p.x+Math.cos(p.yaw)*x+Math.sin(p.yaw)*z,0,p.z-Math.sin(p.yaw)*x+Math.cos(p.yaw)*z);}
   function solveLeg(leg,p,pelvis){
-    const hip=new THREE.Vector3(leg.side*.18,pelvis,0);
+    const hip=new THREE.Vector3(leg.side*.18+torso.position.x,pelvis,0);
     const ankle=leg.world.clone().applyMatrix4(inverse);ankle.y+=.135;
     const direction=ankle.clone().sub(hip),len=clamp(direction.length(),.1,.859);direction.normalize();
+    // Clamp the actual endpoint too. Previously only the triangle calculation
+    // was clamped, then the shin stretched all the way to the original target.
+    ankle.copy(hip).addScaledVector(direction,len);
     const upperLength=.435,lowerLength=.425;
     const along=(upperLength**2-lowerLength**2+len**2)/(2*len);
     const bend=Math.sqrt(Math.max(0,upperLength**2-along**2));
@@ -191,7 +194,7 @@ export function createAstronaut(scene,groundAt,onFootstep){
     const knee=hip.clone().addScaledVector(direction,along).addScaledVector(forward,bend);
     const segment=(node,a,b)=>{node.position.copy(a);const vector=b.clone().sub(a);node.quaternion.setFromUnitVectors(DOWN,vector.clone().normalize());node.scale.set(1,vector.length(),1);};
     segment(leg.upper,hip,knee);segment(leg.lower,knee,ankle);
-    leg.foot.position.copy(leg.world).applyMatrix4(inverse);
+    leg.foot.position.copy(ankle);leg.foot.position.y-=.135;
     const slopeX=(groundAt(leg.world.x+.1,leg.world.z)-groundAt(leg.world.x-.1,leg.world.z))/.2;
     const slopeZ=(groundAt(leg.world.x,leg.world.z+.1)-groundAt(leg.world.x,leg.world.z-.1))/.2;
     const normal=new THREE.Vector3(-slopeX,1,-slopeZ).normalize().applyAxisAngle(UP,-p.yaw);
@@ -215,7 +218,7 @@ export function createAstronaut(scene,groundAt,onFootstep){
     head.rotation.x=clamp(-lookPitch*.22,-.15,.15);
     root.updateMatrixWorld(true);inverse.copy(root.matrixWorld).invert();
     for(const leg of legs){
-      if(!initialized||p.sampling){leg.world=localToWorld(leg.side*.18,.02,p);leg.world.y=groundAt(leg.world.x,leg.world.z);leg.swing=false;}
+      if(!initialized||p.sampling||Math.hypot(leg.world.x-p.x,leg.world.z-p.z)>1.5){leg.world.copy(localToWorld(leg.side*.18,.02,p));leg.world.y=groundAt(leg.world.x,leg.world.z);leg.swing=false;}
       if(!p.grounded){
         const tucked=localToWorld(leg.side*.20,.12+(leg.side>0?.12:-.08),p);tucked.y=p.y+.15+Math.max(0,p.vy)*.06;
         leg.world.lerp(tucked,1-Math.exp(-dt*9));leg.swing=false;
@@ -223,24 +226,28 @@ export function createAstronaut(scene,groundAt,onFootstep){
         const neutral=localToWorld(leg.side*.18,0,p);
         const error=Math.hypot(neutral.x-leg.world.x,neutral.z-leg.world.z);
         const other=legs.find(l=>l!==leg);
-        if(!p.sampling&&!leg.swing&&!other.swing&&(error>(moving?.21:.052)||p.landed)&&lastStep!==leg.side){
+        if(!p.sampling&&!leg.swing&&!other.swing&&(error>(moving?.18:.055)||p.landed)&&(!moving||lastStep!==leg.side)){
           leg.from.copy(leg.world);leg.target.copy(neutral);
-          const stride=clamp(p.speed*(fast?.18:.28),.12,.46);
+          leg.duration=fast?.18:.30;
+          // Place the next boot ahead of where the pelvis will be at landing.
+          // A fixed long swing used to leave both boots trailing the body.
+          const stride=clamp(p.speed*leg.duration+(fast?.18:.12),.08,.68);
           if(moving){leg.target.x+=p.vx/Math.max(.1,p.speed)*stride;leg.target.z+=p.vz/Math.max(.1,p.speed)*stride;}
           leg.target.y=groundAt(leg.target.x,leg.target.z);leg.swing=true;leg.progress=0;lastStep=leg.side;
         }
         if(leg.swing){
-          leg.progress=Math.min(1,leg.progress+dt/(fast?.25:.40));const t=leg.progress,s=t*t*t*(t*(t*6-15)+10);
-          leg.world.lerpVectors(leg.from,leg.target,s);leg.world.y+=Math.sin(t*Math.PI)*(fast?.20:.09);
+          leg.progress=Math.min(1,leg.progress+dt/leg.duration);const t=leg.progress,s=t*t*(3-2*t);
+          leg.world.lerpVectors(leg.from,leg.target,s);leg.world.y+=Math.sin(t*Math.PI)*(fast?.15:.10);
           if(t===1){leg.swing=false;leg.world.y=groundAt(leg.world.x,leg.world.z);if(!seated)onFootstep(leg.world,p.yaw,fast?1.4:1);}
         }
-        if(!moving&&!other.swing&&error<=.055)lastStep=-1;
+        if(!moving&&!leg.swing&&!other.swing&&error<=.055)lastStep=0;
       }
     }
     // Lower the pelvis on uneven ground before solving knees: fixed leg lengths,
     // a planted stance foot and a smooth swing instead of stretching the shins.
     let pelvis=.98+bodyY;
-    for(const leg of legs){const ankle=leg.world.clone().applyMatrix4(inverse);const horizontal=Math.hypot(ankle.x-leg.side*.18,ankle.z);pelvis=Math.min(pelvis,ankle.y+.135+Math.sqrt(Math.max(.16,.85**2-horizontal**2)));}
+    for(const leg of legs){const ankle=leg.world.clone().applyMatrix4(inverse);const horizontal=Math.hypot(ankle.x-leg.side*.18-torso.position.x,ankle.z);pelvis=Math.min(pelvis,ankle.y+.135+Math.sqrt(Math.max(.04,.85**2-horizontal**2)));}
+    pelvis=Math.max(.64,pelvis);
     torso.position.y+=pelvis-(.98+bodyY);
     for(const leg of legs)solveLeg(leg,p,pelvis);
     initialized=true;
