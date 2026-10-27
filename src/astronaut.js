@@ -225,8 +225,11 @@ export function createAstronaut(scene,groundAt,onFootstep){
       } else {
         const neutral=localToWorld(leg.side*.18,0,p);
         const error=Math.hypot(neutral.x-leg.world.x,neutral.z-leg.world.z);
+        // A tucked jump foot can already be horizontally aligned but still
+        // airborne. Recover it even when the transient landing flag was missed.
+        const raised=Math.abs(leg.world.y-groundAt(leg.world.x,leg.world.z))>.02;
         const other=legs.find(l=>l!==leg);
-        if(!p.sampling&&!leg.swing&&!other.swing&&(error>(moving?.18:.055)||p.landed)&&(!moving||lastStep!==leg.side)){
+        if(!p.sampling&&!leg.swing&&!other.swing&&(error>(moving?.18:.055)||raised||p.landed)&&(!moving||lastStep!==leg.side)){
           leg.from.copy(leg.world);leg.target.copy(neutral);
           leg.duration=fast?.18:.30;
           // Place the next boot ahead of where the pelvis will be at landing.

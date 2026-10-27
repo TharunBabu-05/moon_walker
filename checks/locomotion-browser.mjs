@@ -9,6 +9,18 @@ try{
   const report=await page.evaluate(async()=>{
     const THREE=await import('three'),{createAstronaut}=await import('/src/astronaut.js'),{createPlayer,stepPlayer,FIXED_STEP}=await import('/src/physics.js'),{resolveObstacles}=await import('/src/world.js'),{createRockField}=await import('/src/rocks.js'),{createLandscape}=await import('/src/landscape.js');
     const flat=()=>0,p=createPlayer(flat),avatar=createAstronaut(new THREE.Scene(),flat,()=>{});
+    const landingFeet=[];
+    for(const costume of [1,2])for(const fps of [30,60,144])for(const slope of [0,.2]){
+      const ground=x=>x*slope,walker=createPlayer(ground),rig=createAstronaut(new THREE.Scene(),ground,()=>{});rig.setCostume(costume);
+      let accumulator=0,jump=false;
+      for(let frame=0;frame<fps*5;frame++){
+        accumulator+=1/fps;if(frame===fps)jump=true;
+        while(accumulator>=FIXED_STEP){stepPlayer(walker,{x:0,z:0,jump},FIXED_STEP,ground);jump=false;accumulator-=FIXED_STEP;}
+        // Remote playback need not carry the transient landed flag.
+        rig.update({...walker,landed:false},1/fps);rig.root.updateMatrixWorld(true);
+      }
+      landingFeet.push({costume,fps,slope,heights:rig.legs.map(l=>{const foot=l.foot.getWorldPosition(new THREE.Vector3());return foot.y-ground(foot.x);})});rig.dispose();
+    }
     let maxUpperError=0,maxLowerError=0,maxFootMotion=0,stanceSamples=0;
     const previous=avatar.legs.map(l=>l.world.clone());
     for(let i=0;i<720;i++){
@@ -45,9 +57,10 @@ try{
       resolveObstacles(walker,field.colliders,.32,field.surfaceAt);
       if(walker.grounded){walker.y=field.groundAt(walker.x,walker.z);const above=walker.y-landscape.groundAt(walker.x,walker.z);maxGroundedHeight=Math.max(maxGroundedHeight,above);if(above>.08){standingFrames++;landedOnRock=true;}}
     }
-    return {maxUpperError,maxLowerError,maxFootMotion,stanceSamples,contacts,jump:{standingFrames,maxGroundedHeight,walker}};
+    return {landingFeet,maxUpperError,maxLowerError,maxFootMotion,stanceSamples,contacts,jump:{standingFrames,maxGroundedHeight,walker}};
   });
   console.log(JSON.stringify(report,null,2));
+  for(const landing of report.landingFeet)assert.ok(landing.heights.every(h=>Math.abs(h)<.01),`both boots settle after an idle jump: ${JSON.stringify(landing)}`);
   assert.ok(report.maxUpperError<1e-6&&report.maxLowerError<1e-6,'thighs and shins retain fixed lengths through movement, jumps and crouches');
   assert.ok(report.stanceSamples>100&&report.maxFootMotion<1e-6,'stance feet stay planted');
   for(const c of report.contacts){assert.ok(c.grounded&&Math.abs(c.y-c.top)<.01&&c.drift<.01,'actual model supports a stable landing');}
