@@ -10,10 +10,19 @@ export function angleDelta(a,b) { return Math.atan2(Math.sin(b-a),Math.cos(b-a))
 export function createPlayer(heightAt) {
   return {x:0,z:0,y:heightAt(0,0),vx:0,vz:0,vy:0,yaw:0,grounded:true,speed:0,distance:0,landed:false,landingSpeed:0};
 }
+// The continuous terrain is a solid lower bound, independent of streamed rocks
+// and raised platforms. Also repairs penetration caused by external corrections.
+export function enforceTerrainFloor(p,terrainAt){
+  const floor=terrainAt(p.x,p.z);
+  if(!Number.isFinite(floor)||!Number.isFinite(p.y)||p.y>=floor)return false;
+  p.landingSpeed=Math.max(0,-p.vy);p.y=floor;p.vy=0;p.grounded=true;p.landed=true;
+  return true;
+}
 // Fixed-time semi-implicit integration: metres, seconds, and lunar gravity.
 // Terrain-following contact uses the same height function as the rendered mesh.
-export function stepPlayer(p,input,dt,heightAt) {
+export function stepPlayer(p,input,dt,heightAt,terrainAt=heightAt) {
   p.landed=false;
+  enforceTerrainFloor(p,terrainAt);
   const maxSpeed=input.fast?BOUND_SPEED:WALK_SPEED;
   const mag=Math.hypot(input.x,input.z);
   const ix=mag>1?input.x/mag:input.x, iz=mag>1?input.z/mag:input.z;
@@ -30,7 +39,7 @@ export function stepPlayer(p,input,dt,heightAt) {
   if(p.grounded&&distance>0&&nextHeight-oldGround>distance*.8){nx=p.x;nz=p.z;p.vx*=.7;p.vz*=.7;}
   // Stop an airborne body entering a taller surface from its side, including
   // steep terrain that has no separate rock collider to push it back out.
-  if(!p.grounded&&nextHeight>p.y+.06&&nextHeight>oldGround+.06){nx=p.x;nz=p.z;p.vx=0;p.vz=0;}
+  if(!p.grounded&&nextHeight>p.y+.06&&nextHeight>oldGround+.001){nx=p.x;nz=p.z;p.vx=0;p.vz=0;}
   p.x=nx;p.z=nz;
   const ground=heightAt(nx,nz);
   if(p.grounded&&oldGround-ground>.13){p.grounded=false;p.vy=0;}
@@ -41,6 +50,7 @@ export function stepPlayer(p,input,dt,heightAt) {
     // side is a horizontal collision, not permission to snap onto its summit.
     if(previousY>=ground-.06&&p.y<=ground&&p.vy<=0){p.landingSpeed=-p.vy;p.y=ground;p.vy=0;p.grounded=true;p.landed=true;}
   } else {p.y=ground;p.vy=0;}
+  enforceTerrainFloor(p,terrainAt);
   p.speed=Math.hypot(p.vx,p.vz);p.distance+=Math.hypot(p.x-oldX,p.z-oldZ);
   if(p.speed>.05){const target=Math.atan2(-p.vx,-p.vz);p.yaw+=angleDelta(p.yaw,target)*Math.min(1,dt*6);}
   return p;

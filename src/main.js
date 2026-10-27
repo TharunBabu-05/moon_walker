@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createLandscape, buildTerrain } from './terrain.js';
 import { createAstronaut } from './astronaut.js';
 import { createSurfaceSky, createUniverse, MOON_RADIUS, EARTH_DISTANCE } from './universe.js';
-import { createPlayer, stepPlayer, FIXED_STEP, clamp, damp, angleDelta } from './physics.js';
+import { createPlayer, stepPlayer, enforceTerrainFloor, FIXED_STEP, clamp, damp, angleDelta } from './physics.js';
 import {createRoverState,stepRover,resolveObstacles} from './world.js';
 import {createRover} from './rover.js';
 import {createExpedition} from './multiplayer.js';
@@ -507,7 +507,8 @@ async function start(){
           const oldX=player.x,oldZ=player.z,oldDistance=player.distance;
           if(fast&&player.speed>1.9&&player.grounded&&elapsed-lastBound>.85&&!input.jump){player.vy=.60;player.grounded=false;lastBound=elapsed;}
           const wasGrounded=player.grounded;
-          stepPlayer(player,input,FIXED_STEP,groundAt);resolveObstacles(player,terrain.colliders,.32,terrain.rockTopAt);localContacts();
+          stepPlayer(player,input,FIXED_STEP,groundAt,landscape.groundAt);resolveObstacles(player,terrain.colliders,.32,terrain.rockTopAt);localContacts();
+          enforceTerrainFloor(player,landscape.groundAt);
           if(wasGrounded&&!player.grounded&&player.vy>1)sound.effect('jump');
           if(player.landed)sound.effect('land',Math.min(1.5,player.landingSpeed/2));
           player.speed=Math.hypot(player.vx,player.vz);if(player.grounded)player.y=groundAt(player.x,player.z);
@@ -529,6 +530,13 @@ async function start(){
         throwAim.update(dt,player,player.yaw,mode==='first'?pitch:clamp(-followPitch+.25,-.35,.9),sampling.person(expedition.identity())?.specimen?.radius);
         const aim=throwAim.snapshot();$('throw-power').value=aim.charge;$('throw-range').textContent=Math.round(aim.distance||0)+' m · '+(aim.hit||'AIMING');
       }
+    }
+    // Run even while menus, orbit or sampling pause movement. A correction or
+    // a newly streamed obstacle must never leave someone falling below terrain.
+    if(started){
+      enforceTerrainFloor(roverState,landscape.groundAt);
+      if(!riding&&!dismount)enforceTerrainFloor(player,landscape.groundAt);
+      else if(riding&&!dismount)syncDriver();
     }
     sampling.update(started?dt:0,{...player,riding},started&&mode!=='orbit');
     const samplePerson=sampling.person(expedition.identity()),task=samplePerson?.action;

@@ -44,7 +44,7 @@ try{
       const rock=field.records.find(r=>r.x===x&&r.z===z),top=field.surfaceAt(rock,x,z),walker=createPlayer(field.groundAt);
       Object.assign(walker,{x,z,y:top+.4,grounded:false,vy:-.1});
       let rejected=0;
-      for(let i=0;i<360;i++){stepPlayer(walker,{x:0,z:0},FIXED_STEP,field.groundAt);if(resolveObstacles(walker,field.colliders,.32,field.surfaceAt))rejected++;}
+      for(let i=0;i<360;i++){stepPlayer(walker,{x:0,z:0},FIXED_STEP,field.groundAt,landscape.groundAt);if(resolveObstacles(walker,field.colliders,.32,field.surfaceAt))rejected++;}
       contacts.push({top,y:walker.y,grounded:walker.grounded,drift:Math.hypot(walker.x-x,walker.z-z),rejected});
     }
     // Approach through normal movement, jump, then stop on the rock.
@@ -53,7 +53,7 @@ try{
     let jumped=false,landedOnRock=false,standingFrames=0,maxGroundedHeight=0;
     for(let i=0;i<720;i++){
       const jump=!jumped&&walker.x-rock.x<2.42;if(jump)jumped=true;
-      stepPlayer(walker,{x:landedOnRock?0:-1,z:0,jump},FIXED_STEP,field.groundAt);
+      stepPlayer(walker,{x:landedOnRock?0:-1,z:0,jump},FIXED_STEP,field.groundAt,landscape.groundAt);
       resolveObstacles(walker,field.colliders,.32,field.surfaceAt);
       if(walker.grounded){walker.y=field.groundAt(walker.x,walker.z);const above=walker.y-landscape.groundAt(walker.x,walker.z);maxGroundedHeight=Math.max(maxGroundedHeight,above);if(above>.08){standingFrames++;landedOnRock=true;}}
     }
