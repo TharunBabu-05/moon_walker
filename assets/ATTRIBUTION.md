@@ -17,3 +17,5 @@ The models retain their original geometry and UVs; image files are converted to 
 Three.js and its GLTFLoader / BufferGeometryUtils helpers: [MIT license](../vendor/THREE-LICENSE.txt).
 
 PeerJS 1.5.5: [MIT license](../vendor/PEERJS-LICENSE.txt).
+
+Sound effects: selected recordings from Kenney's [Impact Sounds](https://kenney.nl/assets/impact-sounds) and [Interface Sounds](https://kenney.nl/assets/interface-sounds), CC0. See [audio credits and original licences](audio/README.md). Suit airflow, rover motor and aiming tone are generated for SELENE.

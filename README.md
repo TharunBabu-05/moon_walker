@@ -40,6 +40,16 @@ GitHub Pages serves the game files. PeerJS Cloud provides connection signaling, 
 - In the atlas, choose **Visit research station** to move to the concept outpost. Walk up the ramp; the two proximity airlocks open automatically. The white square on the local map marks the station.
 - **V** changes views. **H** hides the interface. **Esc** releases mouse look. The **?** button opens the field guide.
 
+## Sound and interface layout
+
+Open **SOUND** in the top-right tools for master volume, suit ambience, mute and a test sound. Audio starts after **Step onto the Moon** and pauses when the tab loses focus. Footsteps follow boot contact; sampling foley follows the reach, grasp, scoop, pour and release stages. Jumps, landings, rock impacts, suit hits, buggy entry, rover motor/rolling and interface clicks have feedback. Nearby shared rock impacts fade with distance and pan relative to your view. Outdoor effects are a cinematic suit feed, not sound travelling through lunar vacuum.
+
+The 17 locally bundled [Kenney CC0 recordings](assets/audio/README.md) total about 125 KB. Buffers are decoded once; the motor, airflow and aiming tone reuse a persistent Web Audio graph. One-shot voices are capped and cleaned up after playback. Volume and mute are saved on your device.
+
+All side menus share a scrollable right-side stack. Select any panel heading to collapse or expand it, or **PANELS − / +** to hide or restore the whole stack. **TOOLS − / +** collapses the top-right controls in place. On narrower screens the expanded tools form a dropdown. The camera selector stays centered independently of the title and tools.
+
+The mini-map starts at bottom left. Drag its title bar to move it; **− / +** changes its size and **RESET** returns it to the default location and size. Keyboard users can focus the title bar and use arrow keys to move it or **Home** to reset. Click the map image to open the atlas. Panel states, map position and size are saved locally and clamped to fit after resizing the window. The title and bottom-center captions retain their positions.
+
 ## Suit costumes
 
 Use the **Costume** button or press **C** to switch between two crew-visible suits. Costume 1 is the original SELENE EVA suit. Costume 2 adds a padded white suit, reflective dark helmet, gold pressure seals, a multi-gauge chest console, reinforced glove cuffs and layered boots. Your selection is saved on this device.
@@ -108,6 +118,7 @@ npm test
 npm run test:browser
 npm run test:fieldwork
 npm run test:locomotion
+npm run test:hud-audio
 npm run test:expedition
 npm run test:upgrade
 npm run test:navigation

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "precheck": "node --check src/audio.js && node --check src/hud-layout.js",
     "start": "node server.mjs",
     "prepare:assets": "node scripts/prepare-assets.mjs",
     "prepare:expedition": "node scripts/prepare-expedition-assets.mjs",
@@ -12,6 +13,7 @@
     "test:browser": "node checks/browser.mjs",
     "test:fieldwork": "node checks/fieldwork-browser.mjs",
     "test:locomotion": "node checks/locomotion-browser.mjs",
+    "test:hud-audio": "node checks/hud-audio-browser.mjs",
     "test:expedition": "node checks/expedition-browser.mjs",
     "test:upgrade": "node checks/upgrade-browser.mjs",
     "test:navigation": "node checks/navigation-browser.mjs"

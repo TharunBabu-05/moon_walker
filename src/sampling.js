@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {SampleWorld,SAMPLE_DURATIONS} from './sample-world.js';
 
-export function createSampling({scene,groundAt,obstacles,makeRock,network,onDust,onNotice}){
+export function createSampling({scene,groundAt,obstacles,makeRock,network,onDust,onNotice,onEvent=()=>{}}){
   const world=new SampleWorld(groundAt,obstacles),meshes=new Map();
   const ids=new Set(),projected=new THREE.Vector3();
   let current=world.snapshot(),received=performance.now(),lastEvent=0,accumulator=0,publishTime=0,ready=true;
@@ -40,7 +40,7 @@ export function createSampling({scene,groundAt,obstacles,makeRock,network,onDust
       m.rotation.set(r.spin*.7,r.spin*.36,r.spin*.22);
     }
     for(const [id,m] of meshes)if(!ids.has(id)){m.removeFromParent();meshes.delete(id);}
-    for(const e of current.events){if(e.serial<=lastEvent)continue;lastEvent=e.serial;if(current.time-e.time>1)continue;if(e.type==='bounce'||e.type==='scoop')onDust(e,e.strength||.45);if(e.type==='hit'&&e.id===network.identity())onNotice('A loose stone struck your suit.');}
+    for(const e of current.events){if(e.serial<=lastEvent)continue;lastEvent=e.serial;if(current.time-e.time>1)continue;onEvent(e);if(e.type==='bounce'||e.type==='scoop')onDust(e,e.strength||.45);if(e.type==='hit'&&e.id===network.identity())onNotice('A loose stone struck your suit.');}
     const target=nearest(p),me=person(network.identity());marker.visible=visible&&!!target&&!me?.held&&!me?.action&&!p.riding;
     if(marker.visible)marker.position.set(target.x,target.y-target.radius+.012,target.z);
   }

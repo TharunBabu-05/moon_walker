@@ -18,6 +18,8 @@ import {createSampleRig} from './sample-rig.js';
 import {createWorkerClient} from './worker-client.js';
 import {createThrowAim} from './throw-aim.js';
 import {MISSIONS,missionAt,SAMPLE_DEPOT} from './missions.js';
+import {createHUDLayout} from './hud-layout.js';
+import {createAudio} from './audio.js';
 
 const $=id=>document.getElementById(id);
 const canvas=$('scene');
@@ -26,6 +28,8 @@ window.addEventListener('unhandledrejection',event=>failure(event.reason));
 try { await start(); } catch(error) {failure(error);}
 
 async function start(){
+  createHUDLayout();
+  const sound=createAudio();
   const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.65));
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
@@ -40,13 +44,13 @@ async function start(){
   await new Promise(resolve=>requestAnimationFrame(resolve));
   const landscape=createLandscape();$('load-status').textContent='Preparing detailed rock models and surface materials…';
   const terrain=await buildTerrain(scene,renderer,landscape);
-  const station=createStation(scene,terrain.groundAt),groundAt=station.groundAt;
+  const station=createStation(scene,terrain.groundAt,position=>{if(started&&mode!=='orbit')sound.event({type:'door',...position},player,mode==='first'?yaw:followYaw);}),groundAt=station.groundAt;
   const flags=createFlagExhibits(scene,groundAt);
   const player=createPlayer(terrain.groundAt),roverState=createRoverState(landscape.groundAt),rover=createRover(scene,landscape.groundAt,roverState);
   let riding=false,dismount=null,costume=1,aimingActive=false;try{costume=localStorage.getItem('selene-costume')==='2'?2:1;}catch{}
   let navigation={destination:null,points:[],status:'idle',distance:0,index:0},lastPlan=0;
   let footstepCount=0;
-  const astronaut=createAstronaut(scene,groundAt,(position,yaw,strength)=>{footstepCount++;if(Math.abs(position.y-terrain.groundAt(position.x,position.z))<.1)terrain.footstep(position,yaw,strength);});
+  const astronaut=createAstronaut(scene,groundAt,(position,yaw,strength)=>{footstepCount++;if(started&&mode!=='orbit'&&!riding&&!dismount)sound.footstep(strength,Math.abs(position.y-terrain.groundAt(position.x,position.z))>.12);if(Math.abs(position.y-terrain.groundAt(position.x,position.z))<.1)terrain.footstep(position,yaw,strength);});
   astronaut.setCostume(costume);
   const sampleRig=createSampleRig(astronaut,terrain.sampleMesh);
   astronaut.update(player,0);astronaut.root.visible=false;
@@ -97,7 +101,7 @@ async function start(){
     for(const flag of flags.exhibits)dot(flag.x,flag.z,'#cbb58c',4);
   }
   function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>$('toast').classList.remove('visible'),3500);}
-  const modalOpen=()=>$('help').open||$('crew-dialog').open||$('atlas-dialog').open;
+  const modalOpen=()=>$('help').open||$('crew-dialog').open||$('atlas-dialog').open||$('audio-dialog').open;
   const remotes=new Map();let rosterSignature='',sampling,pendingSampleUntil=0;
   const localState=()=>{
     const active=started&&mode!=='orbit'&&!modalOpen()&&!document.hidden;
@@ -131,7 +135,7 @@ async function start(){
         if(!member.state)continue;
         let remote=remotes.get(member.id);
         if(!remote){
-          const avatar=createAstronaut(scene,groundAt,()=>{});avatar.setCostume(member.state.costume||1);avatar.materials.glass.envMap=astronaut.materials.glass.envMap;avatar.materials.glassTwo.envMap=astronaut.materials.glassTwo.envMap;avatar.materials.glassTwo.envMapIntensity=1.2;avatar.materials.gold.envMap=astronaut.materials.gold.envMap;
+          const avatar=createAstronaut(scene,groundAt,(position,_yaw,strength)=>{if(started&&mode!=='orbit')sound.event({type:'step',...position,strength:strength*.65},player,mode==='first'?yaw:followYaw);});avatar.setCostume(member.state.costume||1);avatar.materials.glass.envMap=astronaut.materials.glass.envMap;avatar.materials.glassTwo.envMap=astronaut.materials.glassTwo.envMap;avatar.materials.glassTwo.envMapIntensity=1.2;avatar.materials.gold.envMap=astronaut.materials.gold.envMap;
           const labelCanvas=document.createElement('canvas');labelCanvas.width=512;labelCanvas.height=64;const c=labelCanvas.getContext('2d');c.fillStyle='rgba(5,14,19,.75)';c.fillRect(0,0,512,64);c.fillStyle='#c5e1dc';c.font='25px monospace';c.textAlign='center';c.fillText(member.name.toUpperCase(),256,41);
           const label=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(labelCanvas),transparent:true,depthTest:true}));label.scale.set(2.5,.3125,1);scene.add(label);
           const rv=createRover(scene,landscape.groundAt,member.state.rover||roverState);
@@ -157,7 +161,7 @@ async function start(){
       if(riding&&!dismount)syncDriver();
     }
   });
-  sampling=createSampling({scene,groundAt,makeRock:terrain.sampleMesh,network:expedition,onNotice:toast,onDust:p=>terrain.impactDust(new THREE.Vector3(p.x,p.y,p.z)),
+  sampling=createSampling({scene,groundAt,makeRock:terrain.sampleMesh,network:expedition,onNotice:toast,onEvent:e=>{if(started&&mode!=='orbit')sound.event(e,player,mode==='first'?yaw:followYaw);},onDust:p=>terrain.impactDust(new THREE.Vector3(p.x,p.y,p.z)),
     obstacles:()=>[...terrain.colliders,...station.colliders,...flags.colliders,...expedition.sampleEntries().filter(e=>e.state.rover).map(e=>roverBody(e.state.rover,e.id,false))]});
   const throwAim=createThrowAim(scene,groundAt,()=>[...terrain.colliders,...station.colliders,...flags.colliders,roverBody(roverState,'self',false),...[...remotes].flatMap(([id,r])=>bodiesFor(id,r.current))]);
   let aimView=null,throwPending=false;
@@ -253,7 +257,7 @@ async function start(){
     Object.assign(player,{x,z,y:groundAt(x,z),vx:0,vz:0,vy:0,speed:0,grounded:true});terrain.update(x,z);
     yaw=followYaw=0;pitch=-.08;followPitch=.22;targetFollowDistance=4.6;setMode('first');controls();toast('Research outpost: walk up the ramp. The airlocks open as you approach.');
   }});
-  $('atlas-button').onclick=()=>atlas.open();$('mini-map').onclick=()=>atlas.open();$('mini-map').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();atlas.open();}};
+  $('atlas-button').onclick=()=>atlas.open();$('map').onclick=()=>atlas.open();$('map').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();atlas.open();}};
   function disposeObject(root){
     const geometries=new Set(),materials=new Set();root.traverse(m=>{if(m.geometry)geometries.add(m.geometry);if(m.material)materials.add(m.material);});
     geometries.forEach(g=>g.dispose());materials.forEach(m=>{m.map?.dispose();m.dispose();});root.removeFromParent();
@@ -276,7 +280,7 @@ async function start(){
     costume=next===2?2:1;astronaut.setCostume(costume);$('costume-button').textContent=`COSTUME ${costume}`;
     $('costume-button').setAttribute('aria-label',`Change astronaut costume. Wearing costume ${costume}. Press C to switch.`);
     try{localStorage.setItem('selene-costume',String(costume));}catch{}
-    if(started)toast(costume===1?'Costume 1 · SELENE EVA suit':'Costume 2 · gold-trim expedition suit');
+    if(started){sound.effect('suit');toast(costume===1?'Costume 1 · SELENE EVA suit':'Costume 2 · gold-trim expedition suit');}
   }
   $('costume-button').addEventListener('click',()=>setCostume(costume===1?2:1));
   setCostume(costume);
@@ -293,10 +297,11 @@ async function start(){
       roverState.vx=roverState.vz=roverState.vy=roverState.speed=0;
       const start=new THREE.Vector3().setFromMatrixPosition(rover.driverPose().matrix);
       dismount={progress:0,side:exit.side,from:{x:start.x,y:start.y,z:start.z,yaw:roverState.yaw},to:exit};
+      sound.effect('suit');
       toast('Stepping down from the buggy…');
     }else{
       if(Math.hypot(player.x-roverState.x,player.z-roverState.z)>4.2){toast('Walk to your buggy, or use Locate my buggy.');return;}
-      riding=true;roverState.vx=roverState.vz=0;followYaw=yaw=roverState.yaw;targetFollowDistance=6.8;toast('W / S drive · A / D steer · Space brake · E exit');
+      riding=true;sound.effect('board');roverState.vx=roverState.vz=0;followYaw=yaw=roverState.yaw;targetFollowDistance=6.8;toast('W / S drive · A / D steer · Space brake · E exit');
     }
     keys.clear();jumpRequested=false;controls();
   }
@@ -313,6 +318,7 @@ async function start(){
   function setMode(next,temporary=false){
     if(!temporary)cancelAim(false);
     if(!started||next===mode)return;
+    if(!temporary)sound.effect('ui');
     if(document.pointerLockElement)document.exitPointerLock();
     const orbitChange=next==='orbit'||mode==='orbit';
     if(orbitChange){$('transition').classList.add('active');clearTimeout(transitionTimeout);transitionTimeout=setTimeout(()=>$('transition').classList.remove('active'),210);}
@@ -333,7 +339,7 @@ async function start(){
     if(mode==='orbit'){universe.preset('moon');toast('Scroll to zoom out. Earth + Moon frames both worlds.');}
     else if(mode==='follow'&&!temporary)toast('Drag to orbit your astronaut. Space to jump.');
   }
-  $('begin').addEventListener('click',()=>{if(!ready)return;started=true;$('welcome').hidden=true;$('hud').hidden=false;$('views').hidden=false;canvas.focus();controls();if(invitedRoom)openCrew();else requestLook();});
+  $('begin').addEventListener('click',()=>{if(!ready)return;sound.unlock();started=true;$('welcome').hidden=true;$('hud').hidden=false;$('views').hidden=false;canvas.focus();controls();if(invitedRoom)openCrew();else requestLook();});
   document.querySelector('.brand').addEventListener('click',event=>{event.preventDefault();if(started){if(mode!=='first')setMode('first');toast('1 First person · 2 Astronaut · 3 Orbit');}});
   document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>setMode(button.dataset.view)));
   $('resume').addEventListener('click',requestLook);
@@ -373,6 +379,7 @@ async function start(){
   const movementKeys=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space'];
   document.addEventListener('keydown',event=>{
     if(!started||modalOpen()||['INPUT','TEXTAREA'].includes(event.target.tagName))return;
+    if((event.code==='Space'||event.code.startsWith('Arrow'))&&event.target.closest('button,summary,select'))return;
     if(movementKeys.includes(event.code))event.preventDefault();
     if(event.repeat){keys.add(event.code);return;}
     if(event.code==='Digit1')setMode('first');if(event.code==='Digit2')setMode('follow');if(event.code==='Digit3')setMode('orbit');
@@ -490,15 +497,19 @@ async function start(){
       accumulator=Math.min(accumulator+dt,.16);
       while(accumulator>=FIXED_STEP){
         if(riding){
-          const oldYaw=roverState.yaw,oldX=player.x,oldZ=player.z;
+          const oldYaw=roverState.yaw,oldX=player.x,oldZ=player.z,oldSpeed=roverState.speed;
           stepRover(roverState,{throttle:inputZ,steer:-inputX,brake:keys.has('Space'),fast},FIXED_STEP,landscape.groundAt,terrain.colliders);
+          if(oldSpeed-roverState.speed>1)sound.effect('collision',Math.min(1.5,(oldSpeed-roverState.speed)/3));
           const turn=angleDelta(oldYaw,roverState.yaw);yaw+=turn;followYaw+=turn;
           syncDriver();localContacts();
           player.distance+=Math.hypot(player.x-oldX,player.z-oldZ);
         }else{
           const oldX=player.x,oldZ=player.z,oldDistance=player.distance;
           if(fast&&player.speed>1.9&&player.grounded&&elapsed-lastBound>.85&&!input.jump){player.vy=.60;player.grounded=false;lastBound=elapsed;}
+          const wasGrounded=player.grounded;
           stepPlayer(player,input,FIXED_STEP,groundAt);resolveObstacles(player,terrain.colliders,.32,terrain.rockTopAt);localContacts();
+          if(wasGrounded&&!player.grounded&&player.vy>1)sound.effect('jump');
+          if(player.landed)sound.effect('land',Math.min(1.5,player.landingSpeed/2));
           player.speed=Math.hypot(player.vx,player.vz);if(player.grounded)player.y=groundAt(player.x,player.z);
           player.distance=oldDistance+Math.hypot(player.x-oldX,player.z-oldZ);
         }
@@ -521,6 +532,8 @@ async function start(){
     }
     sampling.update(started?dt:0,{...player,riding},started&&mode!=='orbit');
     const samplePerson=sampling.person(expedition.identity()),task=samplePerson?.action;
+    sound.sample(started&&mode!=='orbit'?task:null);
+    sound.update({active:started&&mode!=='orbit'&&!modalOpen(),riding: riding&&!dismount,speed:roverState.speed,grounded:roverState.grounded,aiming:throwAim.active,charge:throwAim.active?throwAim.snapshot().charge:0});
     if(throwPending&&!task&&!pendingSampleUntil)restoreAimView();
     if(task){player.vx=player.vz=player.speed=0;jumpRequested=false;accumulator=0;player.yaw+=angleDelta(player.yaw,task.origin.yaw)*Math.min(1,dt*14);}
     station.update(dt,[localState(),...[...remotes.values()].map(r=>r.current)]);
@@ -533,7 +546,7 @@ async function start(){
     sampleRig.update({...player,aiming:throwAim.active},samplePerson,sampling.time());if(!task)player.landed=false;astronaut.root.visible=started&&mode!=='orbit';astronaut.head.visible=mode!=='first';
     if(navigation.destination&&navigation.status==='ready'){
       Object.assign(navigation,remainingRoute(player,navigation.points));
-      if(Math.hypot(player.x-navigation.destination.x,player.z-navigation.destination.z)<3){navigation.status='arrived';navigation.distance=0;toast('Objective reached: '+navigation.destination.label);}
+      if(Math.hypot(player.x-navigation.destination.x,player.z-navigation.destination.z)<3){navigation.status='arrived';navigation.distance=0;sound.effect('confirm');toast('Objective reached: '+navigation.destination.label);}
       else if(navigation.offRoute>14&&elapsed-lastPlan>3)setWaypoint(navigation.destination);
     }
     terrain.updateDust(dt);
@@ -551,6 +564,7 @@ async function start(){
     uiTime+=dt;if(started&&uiTime>.15){updateHUD();uiTime=0;}
   }
   // Read-only diagnostic snapshot used by the local integration checks.
+  window.seleneSound=Object.freeze({snapshot:sound.snapshot});
   window.selene=Object.freeze({snapshot:()=>({aim:throwAim.snapshot(),streaming:terrain.streaming(),costume,samples:sampling.snapshot(),ready,started,mode,riding,dismount:dismount?{...dismount}:null,navigation:{...navigation,points:navigation.points.map(p=>({...p}))},flagExhibits:flags.exhibits.map(f=>({id:f.id,x:f.x,z:f.z,design:f.design})),avatarPosition:astronaut.root.position.toArray(),handErrors:astronaut.handErrors(),station:station.snapshot(),atlas:atlas.snapshot(),predictedContacts,renderedRemotes:[...remotes.values()].map(r=>({name:r.name,state:r.current,handErrors:r.astronaut.handErrors(),samples:r.motion.samples.length})),rover:{...roverState},network:expedition.snapshot(),remoteCount:remotes.size,nearbyRocks:terrain.rocks.filter(r=>Math.hypot(r.x-player.x,r.z-player.z)<20).map(r=>({...r})),player:{...player},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},orbitDistance:universe.state.distance,targetOrbitDistance:universe.state.targetDistance,moonRadius:MOON_RADIUS,earthDistance:EARTH_DISTANCE,footsteps:footstepCount,feet:astronaut.legs.map(l=>({position:l.world.toArray(),swing:l.swing,kneeQuaternion:l.lower.quaternion.toArray(),hipQuaternion:l.upper.quaternion.toArray()})),fps,ground:groundAt(player.x,player.z),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})});
   animate();
 }

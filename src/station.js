@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {mergeGeometries} from '../vendor/utils/BufferGeometryUtils.js';
 
 // A fictional, metre-scale surface habitat informed by NASA habitat concepts.
-export function createStation(scene,baseGround){
+export function createStation(scene,baseGround,onDoor=()=>{}){
   const root=new THREE.Group();root.position.set(-25,baseGround(-25,28),28);scene.add(root);
   const floor=root.position.y+.65,colliders=[],doors=[];
   const mat=(color,roughness=.7,metalness=.3)=>new THREE.MeshStandardMaterial({color,roughness,metalness,side:THREE.DoubleSide});
@@ -78,6 +78,6 @@ export function createStation(scene,baseGround){
   for(const m of [...root.children])if(m.isMesh&&!m.userData.dynamic&&!m.material.transparent){m.updateMatrix();const g=m.geometry.clone().applyMatrix4(m.matrix);if(!batches.has(m.material))batches.set(m.material,[]);batches.get(m.material).push(g);root.remove(m);m.geometry.dispose();}
   for(const [material,parts] of batches){const merged=mergeGeometries(parts.map(g=>g.index?g.toNonIndexed():g));const m=new THREE.Mesh(merged,material);m.castShadow=m.receiveShadow=true;root.add(m);parts.forEach(g=>g.dispose());}
   const groundAt=(x,z)=>{const lx=x+25,lz=z-28;if(Math.abs(lx)<2.5&&lz>=-7&&lz<=7||Math.abs(lx)<1.15&&lz>7&&lz<=11)return floor;if(Math.abs(lx)<1.08&&lz>11&&lz<15)return root.position.y+.65*(15-lz)/4;return baseGround(x,z);};
-  function update(dt,walkers){for(const d of doors){const near=walkers.some(p=>!p.riding&&Math.abs(p.x+25)<2&&Math.abs(p.z-(28+d.z))<3.2);d.open=THREE.MathUtils.damp(d.open,near?1:0,7,dt);d.mesh.position.y=1.94+d.open*2.8;d.body.state.y=root.position.y+.65+d.open*2.8;}}
+  function update(dt,walkers){for(const d of doors){const near=walkers.some(p=>!p.riding&&Math.abs(p.x+25)<2&&Math.abs(p.z-(28+d.z))<3.2);if(near!==d.target){if(d.target!==undefined)onDoor({x:-25,y:root.position.y+1,z:28+d.z});d.target=near;}d.open=THREE.MathUtils.damp(d.open,near?1:0,7,dt);d.mesh.position.y=1.94+d.open*2.8;d.body.state.y=root.position.y+.65+d.open*2.8;}}
   return {root,groundAt,colliders,update,floor,entrance:{x:-25,z:44},snapshot:()=>({floor,doors:doors.map(d=>d.open),position:root.position.toArray()})};
 }

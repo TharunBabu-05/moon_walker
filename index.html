@@ -9,6 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='27' fill='%23c3c5c7'/%3E%3Ccircle cx='40' cy='27' r='10' fill='%23989a9d'/%3E%3Ccircle cx='22' cy='42' r='7' fill='%23888b8e'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="atlas.css">
+  <link rel="stylesheet" href="src/hud.css">
   <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
 </head>
 <body>
@@ -76,8 +77,19 @@
     <dl class="help-controls"><div><dt>1 · First person</dt><dd>Look through the astronaut’s eyes. Click for mouse look, or drag.</dd></div><div><dt>2 · Astronaut</dt><dd>Follow your astronaut. Drag to orbit; scroll to move the camera closer.</dd></div><div><dt>3 · Orbit</dt><dd>Explore every side of the Moon. Scroll out to see Earth, or use the Earth + Moon button.</dd></div><div><dt>WASD / arrow keys</dt><dd>Walk in the direction of the camera. Shift to lope. Space to jump.</dd></div><div><dt>V / H / Esc</dt><dd>Cycle views / hide the interface / release the mouse.</dd></div></dl>
     <p class="science-note"><b>E</b> enters or exits your nearby buggy. <b>W / S</b> accelerate and reverse, <b>A / D</b> steer, <b>Space</b> brakes, and <b>Shift</b> raises the speed limit. Stop before exiting. Use <b>CREW</b> to host or join an expedition. <b>M</b> or the local map opens the lunar atlas. Choose <b>Visit research station</b> to enter the concept habitat.</p>
     <p class="science-note"><b>COSTUME:</b> Press <b>C</b> or select the suit button. Costume 1 is the SELENE EVA suit. Costume 2 adds a padded white expedition suit, reflective dark visor, gold pressure seals, detailed chest controls, reinforced gloves and boots. Your crew sees your selected suit.</p>
+    <p class="science-note"><b>YOUR INTERFACE:</b> Select panel headings to fold them. <b>PANELS − / +</b> hides or restores the right-side stack; scroll inside it for more panels. <b>TOOLS − / +</b> folds the top-right buttons. Drag the mini-map title to move it, use its <b>− / +</b> buttons to resize, or <b>RESET</b> to return it to the bottom left. Click the map image to open the atlas. <b>SOUND</b> opens volume and mute settings. Preferences are saved on this device.</p>
     <p class="science-note">Jumps, rover flight, and loose dust use 1.62 m/s² gravity. The walkable highlands are an imagined landscape with detailed Poly Haven rock models and desaturated ground materials; the globe uses NASA LRO imagery.</p><a href="https://svs.gsfc.nasa.gov/4720/" target="_blank" rel="noopener noreferrer">Lunar imagery: NASA’s Scientific Visualization Studio ↗</a>
 <p class="science-note"><b>FIELD SAMPLING:</b> Stop within one metre of a gold-ringed small stone. <b>F</b> turns your explorer toward it and picks it up; <b>B</b> bags it and <b>R</b> retrieves a stored stone. Your camera angle stays where you put it. Hold <b>T</b> to aim through the visor and charge a throw. The projected arc shows the target point; release <b>T</b> to throw and return to your previous view after the animation. <b>Esc</b> cancels aiming. <b>G</b> draws the pocket shovel, scoops regolith and pours it into the soil bag. The sampling panel has touch buttons. Both bags hold 12 samples. Stones bounce in lunar gravity and can make other explorers recoil. Samples last for the current expedition.</p>
+  </dialog>
+  <dialog id="audio-dialog" aria-labelledby="audio-title">
+    <button id="close-audio" class="dialog-close" aria-label="Close sound settings">×</button>
+    <p class="eyebrow">SUIT AUDIO / SOUND SETTINGS</p><h2 id="audio-title">Hear the expedition.</h2>
+    <p>Boots on regolith, suit movement, tools and rover feedback. Sounds are a cinematic suit feed; the Moon has no air to carry outdoor sound.</p>
+    <button id="audio-mute" aria-pressed="false">Mute all sound</button>
+    <label class="audio-level" for="audio-volume">MASTER VOLUME <output id="audio-value">65%</output><input id="audio-volume" type="range" min="0" max="100" value="65"></label>
+    <label class="audio-level" for="audio-ambience">SUIT AMBIENCE <output id="ambience-value">35%</output><input id="audio-ambience" type="range" min="0" max="100" value="35"></label>
+    <button id="audio-test">Test sound</button><p id="audio-status" role="status">Sound starts when you enter the expedition.</p>
+    <p class="science-note">Foley and interface recordings: <a href="https://kenney.nl/assets/impact-sounds" target="_blank" rel="noopener noreferrer">Kenney (CC0)</a>. Suit ambience and rover motor created for SELENE.</p>
   </dialog>
   <section id="error" hidden role="alert"><h2>The surface couldn’t load.</h2><p id="error-message"></p><button onclick="location.reload()">Try again</button></section>
   <script type="module" src="src/main.js"></script>
