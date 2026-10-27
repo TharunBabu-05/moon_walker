@@ -3,7 +3,7 @@ import { createLandscape, buildTerrain } from './terrain.js';
 import { createAstronaut } from './astronaut.js';
 import { createSurfaceSky, createUniverse, MOON_RADIUS, EARTH_DISTANCE } from './universe.js';
 import { createPlayer, stepPlayer, enforceTerrainFloor, FIXED_STEP, clamp, damp, angleDelta } from './physics.js';
-import {createRoverState,stepRover,resolveObstacles} from './world.js';
+import {createRoverState,stepRover,resolveObstacles,roverRockBlocks,roverWheelHeight} from './world.js';
 import {createRover} from './rover.js';
 import {createExpedition} from './multiplayer.js';
 import {MotionBuffer} from './motion.js';
@@ -46,7 +46,8 @@ async function start(){
   const terrain=await buildTerrain(scene,renderer,landscape);
   const station=createStation(scene,terrain.groundAt,position=>{if(started&&mode!=='orbit')sound.event({type:'door',...position},player,mode==='first'?yaw:followYaw);}),groundAt=station.groundAt;
   const flags=createFlagExhibits(scene,groundAt);
-  const player=createPlayer(terrain.groundAt),roverState=createRoverState(landscape.groundAt),rover=createRover(scene,landscape.groundAt,roverState);
+  const wheelGroundAt=(x,z)=>roverWheelHeight(x,z,landscape.groundAt,terrain.colliders,terrain.rockTopAt);
+  const player=createPlayer(terrain.groundAt),roverState=createRoverState(landscape.groundAt),rover=createRover(scene,wheelGroundAt,roverState);
   let riding=false,dismount=null,costume=1,aimingActive=false;try{costume=localStorage.getItem('selene-costume')==='2'?2:1;}catch{}
   let navigation={destination:null,points:[],status:'idle',distance:0,index:0},lastPlan=0;
   let footstepCount=0;
@@ -138,7 +139,7 @@ async function start(){
           const avatar=createAstronaut(scene,groundAt,(position,_yaw,strength)=>{if(started&&mode!=='orbit')sound.event({type:'step',...position,strength:strength*.65},player,mode==='first'?yaw:followYaw);});avatar.setCostume(member.state.costume||1);avatar.materials.glass.envMap=astronaut.materials.glass.envMap;avatar.materials.glassTwo.envMap=astronaut.materials.glassTwo.envMap;avatar.materials.glassTwo.envMapIntensity=1.2;avatar.materials.gold.envMap=astronaut.materials.gold.envMap;
           const labelCanvas=document.createElement('canvas');labelCanvas.width=512;labelCanvas.height=64;const c=labelCanvas.getContext('2d');c.fillStyle='rgba(5,14,19,.75)';c.fillRect(0,0,512,64);c.fillStyle='#c5e1dc';c.font='25px monospace';c.textAlign='center';c.fillText(member.name.toUpperCase(),256,41);
           const label=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(labelCanvas),transparent:true,depthTest:true}));label.scale.set(2.5,.3125,1);scene.add(label);
-          const rv=createRover(scene,landscape.groundAt,member.state.rover||roverState);
+          const rv=createRover(scene,wheelGroundAt,member.state.rover||roverState);
           remote={name:member.name,astronaut:avatar,rover:rv,label,current:{...member.state},target:member.state,motion:new MotionBuffer()};remotes.set(member.id,remote);
         }
         remote.sampleRig??=createSampleRig(remote.astronaut,terrain.sampleMesh);
@@ -150,7 +151,7 @@ async function start(){
       dismount=null;
       const x=clamp(position.x,-10950,10950),z=clamp(position.z,-10950,10950);terrain.update(x,z);
       riding=false;Object.assign(player,{x,z,y:terrain.groundAt(x,z),vx:0,vz:0,vy:0,speed:0,grounded:true});resolveObstacles(player,terrain.colliders);
-      Object.assign(roverState,createRoverState(landscape.groundAt,player.x+3,player.z+2));resolveObstacles(roverState,terrain.colliders,1.08);roverState.y=landscape.groundAt(roverState.x,roverState.z);
+      Object.assign(roverState,createRoverState(landscape.groundAt,player.x+3,player.z+2));resolveObstacles(roverState,terrain.colliders,1.08,null,r=>roverRockBlocks(roverState,r,landscape.groundAt));roverState.y=landscape.groundAt(roverState.x,roverState.z);
       terrain.update(player.x,player.z);toast('You joined the crew. Look for their callsigns on the surface.');
     },onNotice:text=>{pendingSampleUntil=0;toast(text);},
     onSampleRequest:(id,state,request)=>sampling?.request(id,state,request),
@@ -213,7 +214,7 @@ async function start(){
     const others=station.colliders.concat(flags.colliders,riding?[]:[roverBody(roverState,'self',false)]);
     for(const [id,r] of remotes)for(const b of bodiesFor(id,r.target))others.push({...b,state:{...b.state},invMass:0});
     for(let pass=0;pass<2;pass++)for(const other of others)if(resolvePair(body,other,{predict:true}))predictedContacts++;
-    if(riding){if(roverState.grounded)roverState.y=landscape.groundAt(roverState.x,roverState.z);syncDriver();}
+    if(riding){if(roverState.grounded)roverState.y=Math.max(roverState.y,landscape.groundAt(roverState.x,roverState.z));syncDriver();}
     else if(player.grounded)player.y=groundAt(player.x,player.z);
   }
   function blockedAt(x,z,radius=.65,skipRover=false){
@@ -498,7 +499,7 @@ async function start(){
       while(accumulator>=FIXED_STEP){
         if(riding){
           const oldYaw=roverState.yaw,oldX=player.x,oldZ=player.z,oldSpeed=roverState.speed;
-          stepRover(roverState,{throttle:inputZ,steer:-inputX,brake:keys.has('Space'),fast},FIXED_STEP,landscape.groundAt,terrain.colliders);
+          stepRover(roverState,{throttle:inputZ,steer:-inputX,brake:keys.has('Space'),fast},FIXED_STEP,landscape.groundAt,terrain.colliders,terrain.rockTopAt);
           if(oldSpeed-roverState.speed>1)sound.effect('collision',Math.min(1.5,(oldSpeed-roverState.speed)/3));
           const turn=angleDelta(oldYaw,roverState.yaw);yaw+=turn;followYaw+=turn;
           syncDriver();localContacts();

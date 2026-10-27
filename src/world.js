@@ -1,12 +1,13 @@
 import {clamp, damp, GRAVITY, SURFACE_LIMIT} from './physics.js';
 
-export function resolveObstacles(body, obstacles, radius=.32, surfaceAt=null) {
+export function resolveObstacles(body, obstacles, radius=.32, surfaceAt=null,blocks=null) {
   let collided=false;
   for (let pass=0;pass<3;pass++) for (const rock of obstacles) {
     if (body.y >= rock.top-.06 || body.y+1.9 < rock.bottom) continue;
     const dx=body.x-rock.x,dz=body.z-rock.z,limit=radius+rock.radius;
     const distance=Math.hypot(dx,dz);
     if (distance>=limit) continue;
+    if(blocks&&!blocks(rock))continue;
     if(surfaceAt){
       const surface=surfaceAt(rock,body.x,body.z);
       if(Number.isFinite(surface)&&body.y>=surface-.06)continue;
@@ -39,8 +40,33 @@ export function createRoverState(groundAt,x=3,z=2) {
   return {x,z,y:groundAt(x,z),vx:0,vz:0,vy:0,yaw:-.35,speed:0,steering:0,pitch:0,roll:0,wheelTravel:0,grounded:true};
 }
 
+// The rendered chassis underside is 0.425 m above the wheel contact datum.
+// Leave a little clearance margin; tyres can negotiate smaller 0.22 m bumps.
+export const ROVER_CLEARANCE=.40,ROVER_STEP_HEIGHT=.22;
+export function roverRockBlocks(p,rock,groundAt){
+  const dx=rock.x-p.x,dz=rock.z-p.z,c=Math.cos(p.yaw),s=Math.sin(p.yaw);
+  const lateral=c*dx-s*dz,longitudinal=s*dx+c*dz;
+  const pitch=p.pitch||0,roll=p.roll||0;
+  const underside=p.y+ROVER_CLEARANCE*Math.cos(pitch)*Math.cos(roll)
+    +clamp(lateral,-.84,.84)*Math.sin(roll)-clamp(longitudinal,-1.36,1.36)*Math.sin(pitch);
+  if(rock.top>=underside)return true;
+  const nearTyre=Math.abs(Math.abs(lateral)-1.01)<rock.radius+.16;
+  return nearTyre&&rock.top-groundAt(rock.x,rock.z)>ROVER_STEP_HEIGHT;
+}
+export function roverWheelHeight(x,z,groundAt,obstacles,surfaceAt=null){
+  const base=groundAt(x,z);let floor=base;
+  for(const rock of obstacles){
+    if(Math.abs(x-rock.x)>=rock.radius||Math.abs(z-rock.z)>=rock.radius)continue;
+    const distance=Math.hypot(x-rock.x,z-rock.z);if(distance>=rock.radius)continue;
+    if(rock.top-groundAt(rock.x,rock.z)>ROVER_STEP_HEIGHT)continue;
+    const top=surfaceAt?surfaceAt(rock,x,z):rock.bottom+(rock.top-rock.bottom)*Math.sqrt(Math.max(0,1-(distance/rock.radius)**2));
+    if(Number.isFinite(top))floor=Math.max(floor,Math.min(top,base+ROVER_STEP_HEIGHT));
+  }
+  return floor;
+}
+
 // Bicycle steering, limited lunar traction, and ballistic chassis flight.
-export function stepRover(p,input,dt,groundAt,obstacles=[]) {
+export function stepRover(p,input,dt,groundAt,obstacles=[],surfaceAt=null) {
   const throttle=clamp(input.throttle||0,-1,1),steer=clamp(input.steer||0,-1,1);
   p.steering=damp(p.steering,steer*.48,5,dt);
   let speed=-Math.sin(p.yaw)*p.vx-Math.cos(p.yaw)*p.vz;
@@ -59,12 +85,11 @@ export function stepRover(p,input,dt,groundAt,obstacles=[]) {
   const oldY=p.y;
   p.x=clamp(p.x+p.vx*dt,-SURFACE_LIMIT+3,SURFACE_LIMIT-3);
   p.z=clamp(p.z+p.vz*dt,-SURFACE_LIMIT+3,SURFACE_LIMIT-3);
-  if(resolveObstacles(p,obstacles,1.08)){p.vx*=.92;p.vz*=.92;}
+  if(resolveObstacles(p,obstacles,1.08,null,rock=>roverRockBlocks(p,rock,groundAt))){p.vx*=.92;p.vz*=.92;}
   const fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),rx=Math.cos(p.yaw),rz=-Math.sin(p.yaw);
-  const front=groundAt(p.x+fx*1.05,p.z+fz*1.05),back=groundAt(p.x-fx*1.05,p.z-fz*1.05);
-  const left=groundAt(p.x-rx*.95,p.z-rz*.95),right=groundAt(p.x+rx*.95,p.z+rz*.95);
   const corners=[];
-  for(const side of [-1,1])for(const end of [-1,1])corners.push(groundAt(p.x+rx*.95*side+fx*1.05*end,p.z+rz*.95*side+fz*1.05*end));
+  for(const side of [-1,1])for(const end of [-1,1])corners.push(roverWheelHeight(p.x+rx*1.01*side+fx*1.05*end,p.z+rz*1.01*side+fz*1.05*end,groundAt,obstacles,surfaceAt));
+  const front=(corners[1]+corners[3])/2,back=(corners[0]+corners[2])/2,left=(corners[0]+corners[1])/2,right=(corners[2]+corners[3])/2;
   const floor=Math.max(groundAt(p.x,p.z),corners.reduce((a,b)=>a+b,0)/4,Math.max(...corners)-.26);
   if (p.grounded && oldY-floor>.035) {p.grounded=false;p.vy=0;}
   if (!p.grounded) {p.vy-=GRAVITY*dt;p.y+=p.vy*dt;}

@@ -7,7 +7,7 @@ try{
   await page.route('**/src/main.js',r=>r.fulfill({contentType:'text/javascript',body:''}));
   await page.goto('http://127.0.0.1:8000/');
   const report=await page.evaluate(async()=>{
-    const THREE=await import('three'),{createAstronaut}=await import('/src/astronaut.js'),{createPlayer,stepPlayer,FIXED_STEP}=await import('/src/physics.js'),{resolveObstacles}=await import('/src/world.js'),{createRockField}=await import('/src/rocks.js'),{createLandscape}=await import('/src/landscape.js');
+    const THREE=await import('three'),{createAstronaut}=await import('/src/astronaut.js'),{createPlayer,stepPlayer,FIXED_STEP}=await import('/src/physics.js'),{resolveObstacles,createRoverState,stepRover}=await import('/src/world.js'),{createRockField}=await import('/src/rocks.js'),{createLandscape}=await import('/src/landscape.js');
     const flat=()=>0,p=createPlayer(flat),avatar=createAstronaut(new THREE.Scene(),flat,()=>{});
     const landingFeet=[];
     for(const costume of [1,2])for(const fps of [30,60,144])for(const slope of [0,.2]){
@@ -40,6 +40,12 @@ try{
     p.x+=30;avatar.update(p,FIXED_STEP);avatar.samplePose(p,{crouch:.6,tilt:-.8});
     for(const leg of avatar.legs){maxUpperError=Math.max(maxUpperError,Math.abs(leg.upper.scale.y-.435));maxLowerError=Math.max(maxLowerError,Math.abs(leg.lower.scale.y-.425));}
     const landscape=createLandscape(),field=await createRockField(new THREE.Group(),{capabilities:{getMaxAnisotropy:()=>1}},landscape,new THREE.MeshStandardMaterial()),contacts=[];
+    const roverPasses=[];
+    for(let variant=0;variant<3;variant++)for(const x of [0,1.01]){
+      const radius=.18/field.templates[variant].height,rock={x,z:-4,radius,bottom:0,top:.18,yaw:.4,variant},buggy=createRoverState(flat,0,0);buggy.yaw=0;let rise=0;
+      for(let i=0;i<1000;i++){stepRover(buggy,{throttle:1},FIXED_STEP,flat,[rock],field.surfaceAt);rise=Math.max(rise,buggy.y);}
+      roverPasses.push({variant,x,z:buggy.z,rise});
+    }
     for(const [x,z] of [[-3,-5],[6,-12],[-13,-22]]){
       const rock=field.records.find(r=>r.x===x&&r.z===z),top=field.surfaceAt(rock,x,z),walker=createPlayer(field.groundAt);
       Object.assign(walker,{x,z,y:top+.4,grounded:false,vy:-.1});
@@ -57,9 +63,10 @@ try{
       resolveObstacles(walker,field.colliders,.32,field.surfaceAt);
       if(walker.grounded){walker.y=field.groundAt(walker.x,walker.z);const above=walker.y-landscape.groundAt(walker.x,walker.z);maxGroundedHeight=Math.max(maxGroundedHeight,above);if(above>.08){standingFrames++;landedOnRock=true;}}
     }
-    return {landingFeet,maxUpperError,maxLowerError,maxFootMotion,stanceSamples,contacts,jump:{standingFrames,maxGroundedHeight,walker}};
+    return {roverPasses,landingFeet,maxUpperError,maxLowerError,maxFootMotion,stanceSamples,contacts,jump:{standingFrames,maxGroundedHeight,walker}};
   });
   console.log(JSON.stringify(report,null,2));
+  for(const r of report.roverPasses){assert.ok(r.z<-8,'buggy passes the actual small rock mesh');if(r.x===0)assert.equal(r.rise,0,'stone between tyres does not lift the chassis');else assert.ok(r.rise>.005,'tyre contact follows the actual mesh');}
   for(const landing of report.landingFeet)assert.ok(landing.heights.every(h=>Math.abs(h)<.01),`both boots settle after an idle jump: ${JSON.stringify(landing)}`);
   assert.ok(report.maxUpperError<1e-6&&report.maxLowerError<1e-6,'thighs and shins retain fixed lengths through movement, jumps and crouches');
   assert.ok(report.stanceSamples>100&&report.maxFootMotion<1e-6,'stance feet stay planted');
