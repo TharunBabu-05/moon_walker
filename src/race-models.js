@@ -1,85 +1,116 @@
 import * as THREE from 'three';
 import {mergeGeometries} from '../vendor/utils/BufferGeometryUtils.js';
-import {ARENA,CARS,GATES,HAZARDS,trackPoint,roadHeight} from './race-physics.js';
-const mat=(color,metalness=.4,roughness=.45)=>new THREE.MeshStandardMaterial({color,metalness,roughness});
-function batch(root){const sets=new Map();for(const child of [...root.children]){if(!child.isMesh||child.isInstancedMesh||child.children.length)continue;child.updateMatrix();const geo=child.geometry.clone().applyMatrix4(child.matrix);if(!sets.has(child.material))sets.set(child.material,[]);sets.get(child.material).push(geo);child.removeFromParent();child.geometry.dispose();}for(const [material,geos] of sets){const mesh=new THREE.Mesh(mergeGeometries(geos,false),material);geos.forEach(g=>g.dispose());mesh.castShadow=mesh.receiveShadow=true;root.add(mesh);}}
-function box(root,w,h,d,m,x=0,y=0,z=0){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;root.add(mesh);return mesh;}
-function rod(root,a,b,r,m){const delta=new THREE.Vector3().subVectors(b,a),mesh=new THREE.Mesh(new THREE.CylinderGeometry(r,r,delta.length(),8),m);mesh.position.copy(a).add(b).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());root.add(mesh);return mesh;}
-export function createRaceCar(index){
-  const spec=CARS[index],root=new THREE.Group(),body=new THREE.Group();root.add(body);
-  const paint=mat(spec.color,.65,.3),dark=mat(0x101923),metal=mat(0x95a5b2,.8,.28),glass=mat(0x183b52,.8,.12),glow=new THREE.MeshBasicMaterial({color:spec.color}),white=new THREE.MeshBasicMaterial({color:0xc9faff});
-  const width=index===1?2.9:index===2?1.7:2.3,length=index===2?5.6:4.7;
-  box(body,width,.48,length,paint,0,1.0);box(body,width*.9,.20,length*.93,dark,0,.7);
-  const nose=box(body,width*.8,.25,1.5,paint,0,1.3,-1.9);nose.rotation.x=.16;
-  box(body,1.35,.48,1.5,glass,0,1.65,.15).rotation.x=.12;
-  box(body,.16,.54,1.65,metal,0,1.68,.15);box(body,1.6,.12,.16,metal,0,1.95,.75);
-  box(body,width+.5,.15,.6,paint,0,1.7,2.15);
+import {CARS} from './race-physics.js';
+import {STADIUM,TAU,CHECKPOINTS,ROCKFALLS,rockfallPose,coursePoint,ARCHES} from './stadium-layout.js';
+const metal=(color,roughness=.65)=>new THREE.MeshStandardMaterial({color,roughness,metalness:.32});
+const up=new THREE.Vector3(0,1,0);
+function mesh(root,geo,mat,x=0,y=0,z=0){const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;root.add(m);return m;}
+const box=(root,w,h,d,mat,x=0,y=0,z=0)=>mesh(root,new THREE.BoxGeometry(w,h,d),mat,x,y,z);
+function rod(root,a,b,r,mat){const p=new THREE.Vector3(...a),q=new THREE.Vector3(...b),d=q.clone().sub(p),m=mesh(root,new THREE.CylinderGeometry(r,r,d.length(),8),mat);m.position.copy(p).add(q).multiplyScalar(.5);m.quaternion.setFromUnitVectors(up,d.normalize());return m;}
+function batch(root){const groups=new Map();for(const m of [...root.children]){if(!m.isMesh||m.isInstancedMesh||m.children.length)continue;m.updateMatrix();const g=m.geometry.clone().applyMatrix4(m.matrix);if(!groups.has(m.material))groups.set(m.material,[]);groups.get(m.material).push(g);m.removeFromParent();m.geometry.dispose();}for(const [mat,geos] of groups){mesh(root,mergeGeometries(geos),mat);geos.forEach(g=>g.dispose());}}
+function sign(text,width=16,height=3){const c=document.createElement('canvas');c.width=1024;c.height=160;const ctx=c.getContext('2d');ctx.fillStyle='#252b2c';ctx.fillRect(0,0,1024,160);ctx.fillStyle='#d2b789';ctx.fillRect(0,140,1024,6);ctx.fillStyle='#e6e3d8';ctx.font='bold 42px monospace';ctx.textAlign='center';ctx.fillText(text,512,95);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;const group=new THREE.Group(),mat=new THREE.MeshBasicMaterial({map:t});for(const s of [1,-1]){const m=mesh(group,new THREE.PlaneGeometry(width,height),mat,0,0,s*.02);m.rotation.y=s<0?Math.PI:0;}return group;}
+
+export function createRaceCar(index,ground){
+  const root=new THREE.Group(),chassis=new THREE.Group();root.add(chassis);
+  const paint=metal(CARS[index].color),steel=metal(0x8e9391,.48),rust=metal(0x675247,.9),dark=metal(0x292d2e,.93),canvas=new THREE.MeshStandardMaterial({color:0xbab5a5,roughness:1}),lamp=new THREE.MeshStandardMaterial({color:0xe3ca97,emissive:0xb89548,emissiveIntensity:.7});
+  const width=index===1?1.15:.98;
   for(const side of [-1,1]){
-    box(body,.14,.6,.13,metal,side*.85,1.38,2.15);
-    box(body,.08,.08,2.1,glow,side*(width/2+.02),1.2,-.4);
-    box(body,.5,.12,.12,white,side*.7,1.2,-2.65);box(body,.4,.1,.1,glow,side*.7,1,2.4);
-    const gun=box(body,.22,.22,1.4,dark,side*.72,1.8,-1.15);box(gun,.12,.12,.08,glow,0,0,-.72);
-    // Different silhouettes: six-wheel hauler, split pods, and rocket nacelles.
-    if(index===2){const pod=box(body,.65,.65,4.4,paint,side*1.55,.95,0);pod.rotation.z=side*.14;box(body,.15,.16,3.5,glow,side*1.85,1.3,0);}
-    if(index===3){const engine=new THREE.Mesh(new THREE.CylinderGeometry(.28,.38,1.8,12),metal);engine.rotation.x=Math.PI/2;engine.position.set(side*1.1,1.5,1);body.add(engine);box(body,.4,.4,.1,glow,side*1.1,1.5,1.95);}
-    if(index===0)box(body,.65,.15,2.8,paint,side*1.35,1.2,-.6).rotation.z=side*.25;
+    rod(chassis,[side*width,.8,-2.1],[side*width,1.0,2.2],.085,steel);
+    rod(chassis,[side*width,1.0,.4],[side*.82,2.9,.7],.055,steel);rod(chassis,[side*.82,2.9,.7],[side*.82,2.9,-.65],.055,steel);rod(chassis,[side*.82,2.9,-.65],[side*.9,1.1,-1.4],.055,steel);
+    rod(chassis,[side*width,.85,-1.6],[-side*width,.85,1.6],.045,rust);
+    box(chassis,.05,.28,3.2,paint,side*width,1.08,0);
+    const front=mesh(chassis,new THREE.CylinderGeometry(.17,.19,.13,16),steel,side*.87,1.4,-2.1);front.rotation.x=Math.PI/2;
+    mesh(chassis,new THREE.SphereGeometry(.14,12,8),lamp,side*.87,1.4,-2.19).scale.z=.25;
+    for(let j=0;j<7;j++)mesh(chassis,new THREE.CylinderGeometry(.026,.026,.016,6),steel,side*width,1.23,-1.3+j*.42);
   }
-  const wheels=[],zs=index===1?[-1.7,0,1.7]:[-1.65,1.65],springPoints=[];
-  for(let j=0;j<=56;j++){const t=j/56;springPoints.push(new THREE.Vector3(Math.cos(t*Math.PI*12)*.1,t,Math.sin(t*Math.PI*12)*.1));}
-  const springGeo=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(springPoints),56,.018,5,false),vA=new THREE.Vector3(),vB=new THREE.Vector3(),vD=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
-  function connect(mesh,a,b){vD.subVectors(b,a);mesh.position.copy(a).addScaledVector(vD,.5);mesh.scale.y=vD.length();mesh.quaternion.setFromUnitVectors(up,vD.normalize());}
-  for(const side of [-1,1])for(const z of zs){
-    const pivot=new THREE.Group();pivot.position.set(side*(width/2+.35),.62,z);body.add(pivot);
-    const spin=new THREE.Group();pivot.add(spin);
-    const tyre=new THREE.Mesh(new THREE.CylinderGeometry(.62,.62,.38,16),dark);tyre.rotation.z=Math.PI/2;spin.add(tyre);
-    const rim=new THREE.Mesh(new THREE.CylinderGeometry(.39,.39,.40,12),metal);rim.rotation.z=Math.PI/2;spin.add(rim);
-    for(let j=0;j<10;j++){const a=j*Math.PI/5;const tread=box(spin,.43,.07,.18,metal,0,Math.cos(a)*.62,Math.sin(a)*.62);tread.rotation.x=a;}
-    const linkage=new THREE.Group();body.add(linkage);
-    const arm=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,1,8),metal),damper=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,1,8),metal),spring=new THREE.Mesh(springGeo.clone(),metal);linkage.add(arm,damper,spring);
-    wheels.push({pivot,spin,z,side,arm,damper,spring});
-  }
-  const shield=new THREE.Mesh(new THREE.SphereGeometry(3.4,16,10),new THREE.MeshBasicMaterial({color:0x8deaff,transparent:true,opacity:.10,wireframe:true}));shield.position.y=1;root.add(shield);
-  batch(body);for(const w of wheels)batch(w.spin);springGeo.dispose();
-  return {root,update(p){
-    root.position.set(p.x,p.y,p.z);root.rotation.y=p.yaw;body.visible=!p.dead;shield.visible=p.shield>0&&!p.dead;
-    for(const w of wheels){
-      const localX=w.side*(width/2+.35),wx=p.x+Math.cos(p.yaw)*localX+Math.sin(p.yaw)*w.z,wz=p.z-Math.sin(p.yaw)*localX+Math.cos(p.yaw)*w.z;
-      w.pivot.position.y=p.grounded===false?.30:THREE.MathUtils.clamp(.62+roadHeight(wx,wz)-p.y,.30,.94);
-      w.spin.rotation.x=-p.travel/.62;w.pivot.rotation.y=w.z<0?(p.steer||0)*.22:0;
-      vA.set(w.side*.65,.8,w.z);vB.copy(w.pivot.position);connect(w.arm,vA,vB);
-      vA.set(w.side*(width/2),1.12,w.z);connect(w.damper,vA,vB);w.spring.position.copy(vA);vD.subVectors(vB,vA);w.spring.scale.y=vD.length();w.spring.quaternion.setFromUnitVectors(up,vD.normalize());
-    }
-  }};
+  for(const z of [-1.9,-.9,.4,1.8])rod(chassis,[-width,.85,z],[width,.85,z],.07,steel);
+  rod(chassis,[-.82,2.9,.7],[.82,2.9,.7],.055,steel);rod(chassis,[-width,1,-2.15],[width,1,-2.15],.10,rust);
+  box(chassis,1.8,.09,2.7,dark,0,1.05,-.3);
+  box(chassis,.65,.13,.75,canvas,0,1.43,-.02);box(chassis,.65,.8,.10,canvas,0,1.82,.35).rotation.x=-.1;
+  for(const side of [-1,1])rod(chassis,[side*.31,1.45,-.3],[side*.31,1.45,.35],.02,steel);
+  const dash=box(chassis,.9,.22,.4,dark,0,1.45,-1.05);dash.rotation.x=.2;
+  for(let i=0;i<3;i++){const gauge=mesh(chassis,new THREE.CylinderGeometry(.065,.065,.015,16),canvas,-.23+i*.23,1.58,-1.05);gauge.rotation.x=.15;}
+  rod(chassis,[0,1.05,-1],[0,1.83,-.58],.035,steel);
+  const wheel=new THREE.Group();wheel.position.set(0,1.83,-.58);wheel.rotation.x=-.55;chassis.add(wheel);mesh(wheel,new THREE.TorusGeometry(.18,.024,7,24),dark);
+  for(let i=0;i<3;i++){const a=i*TAU/3;rod(wheel,[0,0,0],[Math.cos(a)*.17,Math.sin(a)*.17,0],.014,steel);}
+  const grips=[-1,1].map(s=>{const o=new THREE.Object3D();o.position.x=s*.18;wheel.add(o);return o;});
+  const anchor=new THREE.Object3D();anchor.position.set(0,.55,-.1);chassis.add(anchor);
+  // Exposed battery crates, radiator fins, cables and a strapped spare.
+  box(chassis,1.5,.65,.8,paint,0,1.35,1.5);
+  for(let i=0;i<12;i++)box(chassis,1.35,.028,.04,dark,0,1.1+i*.043,1.92);
+  for(const side of [-1,1]){box(chassis,.09,.69,.85,steel,side*.54,1.35,1.5);const tank=mesh(chassis,new THREE.CylinderGeometry(.19,.19,.75,12),steel,side*.85,1.42,1.2);tank.rotation.x=Math.PI/2;}
+  const hose=new THREE.CatmullRomCurve3([new THREE.Vector3(.8,1.2,1.2),new THREE.Vector3(.9,1.15,.2),new THREE.Vector3(.65,1.6,-.8)]);mesh(chassis,new THREE.TubeGeometry(hose,18,.03,6),dark);
+  if(index===0||index===3){const spare=mesh(chassis,new THREE.TorusGeometry(.56,.14,8,20),dark,0,2.15,1.7);spare.rotation.x=.3;rod(chassis,[-.6,1.75,1.9],[.6,2.6,1.9],.025,steel);}
+  if(index===2){box(chassis,1.7,.035,1.2,canvas,0,2.95,.05);for(let i=0;i<8;i++)box(chassis,.025,.04,1.2,dark,-.7+i*.2,2.98,.05);}
+  if(index===1)for(const side of [-1,1])box(chassis,.65,.55,.8,rust,side*.8,1.45,.7);
+  const tires=[],armLength=.88,armY=1.05,delta=new THREE.Vector3(),a=new THREE.Vector3(),b=new THREE.Vector3(),probe=new THREE.Vector3(),inverse=new THREE.Matrix4();
+  const points=[];for(let i=0;i<=64;i++){const t=i/64;points.push(new THREE.Vector3(Math.cos(t*TAU*7)*.085,t,Math.sin(t*TAU*7)*.085));}const coilGeo=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),64,.017,5);
+  const link=(node,p,q)=>{delta.subVectors(q,p);node.position.copy(p).addScaledVector(delta,.5);node.scale.y=delta.length();node.quaternion.setFromUnitVectors(up,delta.normalize());};
+  for(const side of [-1,1])for(const z of index===1?[-1.65,0,1.65]:[-1.65,1.65]){
+    const carrier=new THREE.Group(),pivot=new THREE.Group(),spin=new THREE.Group();chassis.add(carrier);carrier.add(pivot);pivot.add(spin);
+    const tire=mesh(spin,new THREE.CylinderGeometry(.84,.84,.42,28,1,true),dark);tire.rotation.z=Math.PI/2;
+    for(const s of [-1,1]){const ring=mesh(spin,new THREE.TorusGeometry(.78,.045,5,28),steel,s*.23,0,0);ring.rotation.y=Math.PI/2;const hub=mesh(spin,new THREE.CylinderGeometry(.19,.19,.47,12),paint);hub.rotation.z=Math.PI/2;for(let i=0;i<16;i++){const t=i*TAU/16;rod(spin,[s*.23,0,0],[s*.23,Math.cos(t)*.76,Math.sin(t)*.76],.018,steel);}}
+    for(let i=0;i<26;i++){const t=i*TAU/26,m=box(spin,.49,.035,.15,steel,0,Math.cos(t)*.85,Math.sin(t)*.85);m.rotation.x=t;}
+    const fender=mesh(pivot,new THREE.CylinderGeometry(.99,.99,.58,24,1,true,0,Math.PI*.82),paint,0,.02,0);fender.rotation.z=Math.PI/2;fender.rotation.x=.28;
+    const arms=[];for(const y of [armY,armY+.25]){const arm=new THREE.Group();arm.position.set(side*.72,y,z);chassis.add(arm);for(const d of [-.22,.22])rod(arm,[0,0,d],[side*armLength,0,0],.04,steel);batch(arm);arms.push(arm);}
+    rod(carrier,[0,0,0],[0,.25,0],.055,steel);const shock=new THREE.Group();chassis.add(shock);const damper=mesh(shock,new THREE.CylinderGeometry(.044,.044,1,8),steel),coil=mesh(shock,coilGeo.clone(),rust);
+    tires.push({carrier,pivot,spin,side,z,arms,damper,coil});batch(spin);batch(carrier);
+  }coilGeo.dispose();batch(chassis);
+  const distant=new THREE.Group();root.add(distant);box(distant,1.9,.4,3.8,paint,0,1.15,0);box(distant,1.5,1.1,1.2,dark,0,1.9,.2);for(const s of [-1,1])for(const z of [-1.65,1.65]){const t=mesh(distant,new THREE.CylinderGeometry(.84,.84,.48,10),dark,s*1.57,.84,z);t.rotation.z=Math.PI/2;}batch(distant);distant.visible=false;
+  return {root,detail(distance){chassis.visible=distance<160;distant.visible=!chassis.visible;},update(p){root.position.set(p.x,p.y,p.z);root.rotation.y=p.yaw;chassis.rotation.set(p.pitch||0,0,p.roll||0);distant.rotation.copy(chassis.rotation);wheel.rotation.z=-(p.steering||0)*1.1;root.updateMatrixWorld(true);inverse.copy(chassis.matrixWorld).invert();
+    for(const w of tires){probe.set(w.side*1.57,.84,w.z).applyMatrix4(chassis.matrixWorld);probe.y=ground(probe.x,probe.z)+.84;probe.applyMatrix4(inverse);const y=p.grounded===false?.48:THREE.MathUtils.clamp(probe.y,.48,1.28),angle=Math.asin((y-armY)/armLength),out=armLength*Math.cos(angle);for(const arm of w.arms)arm.rotation.z=w.side*angle;w.carrier.position.set(w.side*(.72+out),y,w.z);w.pivot.rotation.y=w.z<0?(p.steering||0)*.36:0;w.spin.rotation.x=-(p.travel||0)/.84;a.set(w.side*.80,1.65,w.z);b.set(w.side*(.72+out*.82),armY+(y-armY)*.82,w.z);link(w.damper,a,b);w.coil.position.copy(a);delta.subVectors(b,a);w.coil.scale.y=delta.length();w.coil.quaternion.setFromUnitVectors(up,delta.normalize());}
+  },driverPose(){root.updateMatrixWorld(true);return {matrix:anchor.matrixWorld.clone(),grips:grips.map(g=>g.getWorldPosition(new THREE.Vector3()))};}};
 }
-function textSign(text,width=30,height=6){const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=160;const c=canvas.getContext('2d');c.fillStyle='#091721';c.fillRect(0,0,1024,160);c.strokeStyle='#64e7df';c.lineWidth=7;c.strokeRect(5,5,1014,150);c.fillStyle='#dbf9f1';c.font='bold 48px monospace';c.textAlign='center';c.fillText(text,512,98);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;return new THREE.Mesh(new THREE.PlaneGeometry(width,height),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}));}
-export function createArenaGateway(scene,ground){const root=new THREE.Group();root.position.set(ARENA.gate.x,ground(ARENA.gate.x,ARENA.gate.z),ARENA.gate.z);scene.add(root);const metal=mat(0x485e6b),glow=new THREE.MeshBasicMaterial({color:0x55dfd5});for(const side of [-1,1]){box(root,1,12,1,metal,side*9,6);box(root,.2,10,1.1,glow,side*9,6);}box(root,20,1,1,metal,0,12);const sign=textSign('APOGEE / RACE TERMINAL',20,3);sign.position.y=10;root.add(sign);return root;}
-export function createRaceScene(){
-  const scene=new THREE.Scene();scene.background=new THREE.Color(0x02050c);
-  scene.add(new THREE.HemisphereLight(0xaecfe1,0x383445,1.5));const sun=new THREE.DirectionalLight(0xfff1dd,3);sun.position.set(-4000,6000,-2000);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-35,right:35,top:35,bottom:-35,near:1,far:250});sun.shadow.bias=-.0002;sun.shadow.normalBias=.025;scene.add(sun,sun.target);
-  const stars=new Float32Array(1800);for(let i=0;i<600;i++){const a=i*2.39996,y=.08+(i%97)/97*.9,r=18000*Math.sqrt(1-y*y);stars[i*3]=ARENA.x+Math.cos(a)*r;stars[i*3+1]=18000*y;stars[i*3+2]=ARENA.z+Math.sin(a)*r;}const starGeo=new THREE.BufferGeometry();starGeo.setAttribute('position',new THREE.BufferAttribute(stars,3));scene.add(new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xa9cbdc,size:9,sizeAttenuation:true})));
-  const dust=new THREE.TextureLoader().load('assets/regolith/color.webp');dust.wrapS=dust.wrapT=THREE.RepeatWrapping;dust.colorSpace=THREE.SRGBColorSpace;dust.anisotropy=4;
-  const dustLarge=dust.clone();dustLarge.repeat.set(650,650);dustLarge.needsUpdate=true;
-  const lunar=mat(0x89888b,.05,1);lunar.map=dust;const field=mat(0x89888b,.05,1);field.map=dustLarge;
-  const ground=new THREE.Mesh(new THREE.CircleGeometry(3200,160),field);ground.rotation.x=-Math.PI/2;ground.position.set(ARENA.x,-2.02,ARENA.z);scene.add(ground);
-  const road=mat(0x27323b,.3,.86),edge=new THREE.MeshBasicMaterial({color:0x48b8b9});
-  road.side=THREE.DoubleSide;edge.side=THREE.DoubleSide;
-  road.map=dust;lunar.side=THREE.DoubleSide;
-  // A continuous ribbon, sampled across the surface of potholes and launch ramps.
-  function ribbon(offset,width,material){const pos=[],uv=[],indices=[],steps=4096,cross=width>100?40:12;for(let i=0;i<=steps;i++){const t=i/steps,p=trackPoint(t),a=Math.PI+t*Math.PI*2;for(let j=0;j<=cross;j++){const o=offset-width/2+j/cross*width,x=p.x+Math.cos(a)*o,z=p.z+Math.sin(a)*o;pos.push(x,roadHeight(x,z)+(material===lunar?0:.025),z);uv.push(x/12,z/12);if(i<steps&&j<cross){const k=i*(cross+1)+j;indices.push(k,k+cross+1,k+1,k+1,k+cross+1,k+cross+2);}}}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();scene.add(new THREE.Mesh(geo,material));}
-  ribbon(0,400,lunar);ribbon(0,90,road);ribbon(-46,1.4,edge);ribbon(46,1.4,edge);
-  const matrix=new THREE.Object3D(),standMat=mat(0x495362,.65,.6),stands=new THREE.InstancedMesh(new THREE.BoxGeometry(115,35,90),standMat,160),rail=new THREE.InstancedMesh(new THREE.BoxGeometry(118,4,2),edge,160);
-  for(let i=0;i<160;i++){const a=i/160*Math.PI*2;matrix.position.set(ARENA.x+Math.cos(a)*2980,12,ARENA.z+Math.sin(a)*2980);matrix.rotation.set(0,-a,0);matrix.updateMatrix();stands.setMatrixAt(i,matrix.matrix);matrix.position.y=31;matrix.updateMatrix();rail.setMatrixAt(i,matrix.matrix);}scene.add(stands,rail);
-  const tiers=new THREE.InstancedMesh(new THREE.BoxGeometry(95,5,18),standMat,640),seats=new THREE.InstancedMesh(new THREE.BoxGeometry(90,.7,8),edge,640);
-  for(let i=0;i<160;i++){const t=i/160,p=trackPoint(t),q=trackPoint(t+.001),a=Math.PI+t*Math.PI*2;for(let row=0;row<4;row++){matrix.position.set(p.x+Math.cos(a)*(125+row*18),row*5+2,p.z+Math.sin(a)*(125+row*18));matrix.rotation.set(0,Math.atan2(q.x-p.x,q.z-p.z)+Math.PI/2,0);matrix.updateMatrix();tiers.setMatrixAt(i*4+row,matrix.matrix);matrix.position.y+=2.8;matrix.updateMatrix();seats.setMatrixAt(i*4+row,matrix.matrix);}}scene.add(tiers,seats);
-  const core=new THREE.Group();core.position.set(ARENA.x,0,ARENA.z);scene.add(core);box(core,70,130,70,standMat,0,65);for(const side of [-1,1])box(core,4,135,73,edge,side*33,68);const board=textSign('APOGEE / CRATER CIRCUIT',160,25);board.position.set(0,150,38);core.add(board);
-  const post=mat(0x748598),yellow=new THREE.MeshBasicMaterial({color:0xffc768});
-  for(let i=0;i<GATES.length;i++){const p=GATES[i],q=trackPoint(i/24+.001),root=new THREE.Group();root.position.set(p.x,roadHeight(p.x,p.z),p.z);root.rotation.y=Math.atan2(q.x-p.x,q.z-p.z);scene.add(root);for(const side of [-1,1]){box(root,1.3,17,1.3,post,side*43,8.5);box(root,.35,15,1.5,i===0?yellow:edge,side*43,9);}box(root,88,1.5,1.5,post,0,17);const label=textSign(i===0?'APOGEE / START + FINISH':`${String(i).padStart(2,'0')} / CHECKPOINT`,36,4);label.position.y=15;root.add(label);}
-  for(const h of HAZARDS){
-    if(h.type==='barrier'){const mesh=new THREE.Mesh(new THREE.CylinderGeometry(h.radius*.75,h.radius,5,8),mat(0x6c506a));mesh.position.set(h.x,2.5,h.z);scene.add(mesh);const top=new THREE.Mesh(new THREE.TorusGeometry(h.radius*.8,.22,6,16),yellow);top.rotation.x=Math.PI/2;top.position.set(h.x,5,h.z);scene.add(top);}
-    if(h.type==='pool'||h.type==='boost'){const m=new THREE.Mesh(new THREE.CircleGeometry(h.radius*(h.type==='pool'?.72:1),24),new THREE.MeshBasicMaterial({color:h.type==='pool'?0x1d87b4:0x67e9ad,transparent:true,opacity:.74}));m.rotation.x=-Math.PI/2;m.position.set(h.x,h.type==='pool'?-.16:.06,h.z);scene.add(m);const label=textSign(h.type==='pool'?'COOLANT / SLOW':'BOOST >>>',15,2.5);label.position.set(h.x,5,h.z);scene.add(label);}
+
+export function createStadium(scene,ground,makeRock){
+  const root=new THREE.Group();root.name='Permanent lunar stadium';scene.add(root);
+  const concrete=new THREE.MeshStandardMaterial({color:0x969b98,roughness:.95,emissive:0x272d2e,emissiveIntensity:.35}),steel=metal(0x747d7f),dark=metal(0x343c3e),cloth=new THREE.MeshStandardMaterial({color:0xbab9ae,roughness:.95,side:THREE.DoubleSide,emissive:0x22292a,emissiveIntensity:.25}),gold=metal(0xa88d56),light=new THREE.MeshBasicMaterial({color:0xd4d0b9});
+  const dummy=new THREE.Object3D(),sectors=[],sections=96,rows=12,seatRows=8,perRow=25;
+  const tier=new THREE.InstancedMesh(new THREE.BoxGeometry(68,3,6.5),concrete,sections*rows),posts=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),steel,sections*4),roofs=new THREE.InstancedMesh(new THREE.BoxGeometry(70,1.4,90),cloth,sections),rails=new THREE.InstancedMesh(new THREE.BoxGeometry(70,2.5,1),dark,sections);
+  let n=0,np=0,nr=0;const crowdLocations=[];
+  for(let i=0;i<sections;i++){const angle=i/sections*TAU;if(Math.abs(Math.atan2(Math.sin(angle-Math.PI),Math.cos(angle-Math.PI)))<.065)continue;const x=STADIUM.x+Math.cos(angle)*1070,z=STADIUM.z+Math.sin(angle)*1070,base=ground(x,z)+2;
+    for(let row=0;row<rows;row++){const r=1070+row*6;dummy.position.set(STADIUM.x+Math.cos(angle)*r,base+row*3,STADIUM.z+Math.sin(angle)*r);dummy.rotation.set(0,-angle-Math.PI/2,0);dummy.scale.set(1,1,1);dummy.updateMatrix();tier.setMatrixAt(n++,dummy.matrix);
+      if(row<seatRows)for(let s=0;s<perRow;s++){if(i%4===0&&s===perRow-1)continue;const a=angle+(s-(perRow-1)/2)*2.5/r;crowdLocations.push({x:STADIUM.x+Math.cos(a)*r,y:base+row*3+1.6,z:STADIUM.z+Math.sin(a)*r,yaw:-a+Math.PI/2,sector:i});}
+    }
+    const roofR=1110;dummy.position.set(STADIUM.x+Math.cos(angle)*roofR,base+54,STADIUM.z+Math.sin(angle)*roofR);dummy.rotation.set(0,-angle-Math.PI/2,0);dummy.scale.set(1,1,1);dummy.updateMatrix();roofs.setMatrixAt(nr,dummy.matrix);dummy.position.set(x,base+2.8,z);dummy.updateMatrix();rails.setMatrixAt(nr++,dummy.matrix);
+    for(const rr of [1066,1150])for(const da of [-.028,.028]){const a=angle+da,xx=STADIUM.x+Math.cos(a)*rr,zz=STADIUM.z+Math.sin(a)*rr,y=ground(xx,zz),height=Math.max(3,base+54-y);dummy.position.set(xx,y+height/2,zz);dummy.rotation.set(0,0,0);dummy.scale.set(1.1,height,1.1);dummy.updateMatrix();posts.setMatrixAt(np++,dummy.matrix);}
+    const wallBottom=ground(x,z)-2;
+    // A low retaining wall preserves the spectators' sightline into the crater.
+    const retaining=box(root,68,4,4,concrete,x,wallBottom+2,z);retaining.rotation.y=-angle-Math.PI/2;
+    const stripe=box(root,68,.4,4.1,gold,x,wallBottom+3.8,z);stripe.rotation.copy(retaining.rotation);
+    if(i%4===0){const sectorSign=sign('SECTOR '+String(i/4+1).padStart(2,'0'),24,3);sectorSign.position.set(x,base+7,z);sectorSign.rotation.y=-angle-Math.PI/2;root.add(sectorSign);}
+    const aisle=angle+.029,inner=1045,outer=1142,y0=ground(STADIUM.x+Math.cos(aisle)*inner,STADIUM.z+Math.sin(aisle)*inner),y1=base+37.5;
+    if(i%4===0){const ramp=new THREE.Group();ramp.position.set(STADIUM.x+Math.cos(aisle)*(inner+outer)/2,(y0+y1)/2,STADIUM.z+Math.sin(aisle)*(inner+outer)/2);ramp.rotation.y=Math.PI/2-aisle;const deck=box(ramp,3.8,.3,Math.hypot(outer-inner,y1-y0),steel);deck.rotation.x=-Math.atan2(y1-y0,outer-inner);root.add(ramp);}
+    sectors.push({i,x,z,base,aisle,y0,y1});
   }
-  // Pit lane: four distinct display vehicles and illuminated garage bays.
-  const start=trackPoint(0);for(let i=0;i<4;i++){const x=start.x-100,z=start.z+i*18;box(scene,14,.3,15,post,x,.1,z);box(scene,14,.4,15,standMat,x,6,z);for(const side of [-1,1])box(scene,.5,6,.5,post,x+side*6.5,3,z+6);const car=createRaceCar(i);car.update({x,y:0,z,yaw:Math.PI/2,hp:100,travel:0,speed:0});scene.add(car.root);const sign=textSign(CARS[i].name.toUpperCase(),13,2);sign.position.set(x,4.5,z+6);scene.add(sign);}
-  scene.traverse(o=>{if(o.isMesh)o.receiveShadow=true;});
-  const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.15,25000);return {scene,camera,sun};
+  tier.count=n;posts.count=np;roofs.count=rails.count=nr;root.add(tier,posts,roofs,rails);for(const m of [tier,posts,roofs,rails]){m.receiveShadow=true;m.computeBoundingSphere();}
+  // Far crowd heads cost one draw. Detailed seated suits appear by section nearby.
+  const headPositions=new Float32Array(crowdLocations.length*3);crowdLocations.forEach((p,i)=>headPositions.set([p.x,p.y+1.26,p.z],i*3));
+  const headCanvas=document.createElement('canvas');headCanvas.width=headCanvas.height=32;const headContext=headCanvas.getContext('2d');headContext.fillStyle='#cecec5';headContext.beginPath();headContext.arc(16,16,15,0,TAU);headContext.fill();
+  const headGeometry=new THREE.BufferGeometry();headGeometry.setAttribute('position',new THREE.BufferAttribute(headPositions,3));const farCrowd=new THREE.Points(headGeometry,new THREE.PointsMaterial({size:.48,map:new THREE.CanvasTexture(headCanvas),alphaTest:.4}));root.add(farCrowd);
+  const suit=new THREE.Group(),white=new THREE.MeshStandardMaterial({color:0xd1cec2,roughness:1}),visor=metal(0x917447,.3);
+  mesh(suit,new THREE.SphereGeometry(.27,8,6),white,0,.87,0).scale.set(1.1,1.3,.8);mesh(suit,new THREE.SphereGeometry(.25,10,7),white,0,1.28,0);mesh(suit,new THREE.SphereGeometry(.20,8,6),visor,0,1.29,-.13).scale.z=.65;box(suit,.35,.42,.18,dark,0,.9,.26);
+  for(const s of [-1,1]){rod(suit,[s*.31,1.05,0],[s*.37,.65,-.15],.10,white);rod(suit,[s*.18,.58,0],[s*.18,.58,-.38],.12,white);rod(suit,[s*.18,.58,-.38],[s*.18,.14,-.4],.10,white);box(suit,.22,.13,.34,dark,s*.18,.12,-.48);}
+  box(suit,.60,.10,.65,dark,0,.46,-.10);box(suit,.60,.65,.08,dark,0,.82,.30);
+  for(const s of [-1,1]){box(suit,.06,.45,.06,steel,s*.24,.225,.15);mesh(suit,new THREE.SphereGeometry(.13,8,6),white,s*.31,1.02,0);const cuff=mesh(suit,new THREE.TorusGeometry(.105,.025,5,8),gold,s*.37,.7,-.13);cuff.rotation.x=Math.PI/2;mesh(suit,new THREE.SphereGeometry(.12,8,6),white,s*.18,.59,-.38).scale.z=.6;box(suit,.035,.4,.04,gold,s*.20,.9,-.22);box(suit,.25,.025,.3,steel,s*.18,.07,-.48);}
+  box(suit,.28,.23,.05,steel,0,.94,-.23);for(let j=0;j<3;j++)mesh(suit,new THREE.SphereGeometry(.023,5,4),dark,-.08+j*.08,.97,-.27);
+  mesh(suit,new THREE.TorusGeometry(.205,.026,5,12),gold,0,1.29,-.14);batch(suit);const detailed=[];
+  for(const section of sectors){const people=crowdLocations.filter(p=>p.sector===section.i),group=new THREE.Group();root.add(group);for(const part of suit.children){const instances=new THREE.InstancedMesh(part.geometry,part.material,people.length);people.forEach((p,i)=>{dummy.position.set(p.x,p.y,p.z);dummy.rotation.set(0,p.yaw,0);dummy.scale.setScalar(1);dummy.updateMatrix();instances.setMatrixAt(i,dummy.matrix);});group.add(instances);}group.visible=false;detailed.push({...section,group});}
+  // Monumental entrance, scoreboards, stairs and industrial floodlight towers.
+  for(const side of [-1,1]){const x=STADIUM.gate.x,z=STADIUM.z+side*35,y=ground(x,z);box(root,8,50,9,concrete,x,y+25,z);for(let j=0;j<5;j++)box(root,8.2,.8,9.2,gold,x,y+8+j*8,z);const gantry=sign('SELENE / CRATER STADIUM',72,9);gantry.rotation.y=Math.PI/2;gantry.position.set(x,y+48,STADIUM.z);if(side===1)root.add(gantry);}
+  for(let i=0;i<12;i++){const a=i*TAU/12,r=1180,x=STADIUM.x+Math.cos(a)*r,z=STADIUM.z+Math.sin(a)*r,y=ground(x,z);box(root,3,95,3,steel,x,y+47,z);const bank=box(root,23,6,3,dark,x,y+94,z);bank.rotation.y=-a;for(let j=0;j<5;j++)box(bank,3.4,3,.15,light,-8+j*4,0,-1.6);}
+  const scoreboard=sign('CRATER RUN / CREW RACING',65,11);scoreboard.position.set(STADIUM.gate.x+35,ground(STADIUM.gate.x+35,28)+35,28);scoreboard.rotation.y=Math.PI/2;root.add(scoreboard);
+  // Sparse survey poles mark a regolith route, never a road or neon ribbon.
+  for(let i=0;i<16;i++){const p=CHECKPOINTS[i],a=Math.atan2(p.z-STADIUM.z,p.x-STADIUM.x);for(const side of [-1,1]){const x=p.x+Math.cos(a)*side*30,z=p.z+Math.sin(a)*side*30,y=ground(x,z);box(root,.18,5,.18,steel,x,y+2.5,z);const flag=mesh(root,new THREE.PlaneGeometry(1.5,1),cloth,x,y+4.5,z);flag.rotation.y=-a;}
+    const px=p.x+Math.cos(a)*36,pz=p.z+Math.sin(a)*36,py=ground(px,pz)+5;
+    const plate=sign(i===0?'START / GRID':String(i).padStart(2,'0')+' / '+p.name.toUpperCase(),i===0?12:7,i===0?2:1.2);plate.position.set(px,py,pz);plate.rotation.y=Math.atan2(coursePoint(i/16+.001).x-p.x,coursePoint(i/16+.001).z-p.z);root.add(plate);box(root,.25,5,.25,steel,px,py-2.5,pz);
+  }
+  const stakes=new THREE.InstancedMesh(new THREE.CylinderGeometry(.055,.08,1.7,5),cloth,512);let stakeCount=0;
+  for(let i=0;i<256;i++){const p=coursePoint(i/256),a=Math.atan2(p.z-STADIUM.z,p.x-STADIUM.x);for(const s of [-1,1]){const x=p.x+Math.cos(a)*30*s,z=p.z+Math.sin(a)*30*s;dummy.position.set(x,ground(x,z)+.85,z);dummy.rotation.set(0,0,0);dummy.scale.setScalar(1);dummy.updateMatrix();stakes.setMatrixAt(stakeCount++,dummy.matrix);}}root.add(stakes);
+  // Photographed rock meshes form cliffs and bridges around the course.
+  const rockGroups=[];for(const p of ARCHES){const a=Math.atan2(p.z-STADIUM.z,p.x-STADIUM.x),base=ground(p.x,p.z);const group=new THREE.Group();root.add(group);for(const s of [-1,1]){const x=p.x+Math.cos(a)*s*49,z=p.z+Math.sin(a)*s*49,r=makeRock(28,Math.abs(s));r.position.set(x,base+20,z);r.scale.set(1,1.8,1);r.rotation.y=-a;group.add(r);const foot=makeRock(24,2);foot.position.set(x,ground(x,z)+4,z);foot.scale.set(1.3,.8,1.2);group.add(foot);}const cap=makeRock(39,2);cap.scale.set(1.9,.45,.65);cap.rotation.y=-a;cap.position.set(p.x,base+43,p.z);group.add(cap);rockGroups.push({group,x:p.x,z:p.z});}
+  batch(root);
+  const falling=ROCKFALLS.map(s=>{const rock=makeRock(s.radius,s.id%3);root.add(rock);const warning=mesh(root,new THREE.RingGeometry(s.radius+1,s.radius+1.5,28),new THREE.MeshBasicMaterial({color:0xcda15c,side:THREE.DoubleSide,transparent:true,opacity:.8}));warning.rotation.x=-Math.PI/2;return {rock,warning,site:s};});
+  // Transparent barriers along the spectator front are represented by solid terrain-side walls.
+  return {root,crowdCount:crowdLocations.length,update(viewer,state){for(const s of detailed)s.group.visible=Math.hypot(viewer.x-s.x,viewer.z-s.z)<75;for(const r of rockGroups)r.group.visible=Math.hypot(viewer.x-r.x,viewer.z-r.z)<1600;for(const f of falling){const p=rockfallPose(f.site,state?.raceTime||0,ground(f.site.x,f.site.z)),running=state?.phase==='racing';f.rock.visible=running&&p.active;f.rock.position.set(p.x,p.y,p.z);f.rock.rotation.set(p.y*.04,p.y*.03,0);f.warning.visible=running&&(p.warning||p.active);f.warning.position.set(p.x,ground(p.x,p.z)+.08,p.z);f.warning.material.opacity=.4+.4*Math.sin((state?.time||0)*8)**2;}},floor(x,z,base){const r=Math.hypot(x-STADIUM.x,z-STADIUM.z),a=Math.atan2(z-STADIUM.z,x-STADIUM.x);for(const s of sectors)if(s.i%4===0&&r>=1045&&r<=1142&&Math.abs(Math.atan2(Math.sin(a-s.aisle),Math.cos(a-s.aisle)))*r<1.9)return Math.max(base,s.y0+(s.y1-s.y0)*(r-1045)/97+.16);if(r<1067||r>1142||Math.abs(Math.atan2(Math.sin(a-Math.PI),Math.cos(a-Math.PI)))<.065)return base;const section=sectors.find(s=>Math.abs(Math.atan2(Math.sin(a-s.i/sections*TAU),Math.cos(a-s.i/sections*TAU)))<Math.PI/sections);if(!section)return base;return Math.max(base,section.base+Math.max(0,Math.floor((r-1067)/6))*3+1.5);},snapshot:()=>({sameScene:root.parent===scene,radius:STADIUM.radius,crowd:crowdLocations.length,stands:sectors.length})};
 }

@@ -30,7 +30,7 @@ window.addEventListener('unhandledrejection',event=>failure(event.reason));
 try { await start(); } catch(error) {failure(error);}
 
 async function start(){
-  let race;
+  let race,lastRaceYaw=null;
   createHUDLayout();
   const sound=createAudio();
   const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
@@ -47,7 +47,7 @@ async function start(){
   await new Promise(resolve=>requestAnimationFrame(resolve));
   const landscape=createLandscape();$('load-status').textContent='Preparing detailed rock models and surface materials…';
   const terrain=await buildTerrain(scene,renderer,landscape);
-  const station=createStation(scene,terrain.groundAt,position=>{if(started&&mode!=='orbit')sound.event({type:'door',...position},player,mode==='first'?yaw:followYaw);}),groundAt=station.groundAt;
+  const station=createStation(scene,terrain.groundAt,position=>{if(started&&mode!=='orbit')sound.event({type:'door',...position},player,mode==='first'?yaw:followYaw);}),groundAt=(x,z)=>race?race.floor(x,z,station.groundAt(x,z)):station.groundAt(x,z);
   const flags=createFlagExhibits(scene,groundAt);
   const wheelGroundAt=(x,z)=>roverWheelHeight(x,z,landscape.groundAt,terrain.colliders,terrain.rockTopAt);
   const player=createPlayer(terrain.groundAt),roverState=createRoverState(landscape.groundAt),rover=createRover(scene,wheelGroundAt,roverState);
@@ -90,6 +90,7 @@ async function start(){
     for(let x=60;x<360;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,240);ctx.stroke();}
     for(let y=60;y<240;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(360,y);ctx.stroke();}
     const project=p=>worldToMap(p,player,mapSpan,360,240);
+    race?.drawMap(ctx,project);
     if(navigation.points.length){ctx.strokeStyle='#e8c68f';ctx.lineWidth=3;ctx.setLineDash([8,5]);ctx.beginPath();navigation.points.slice(navigation.index||0).forEach((p,i)=>{const q=project(p);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});ctx.stroke();ctx.setLineDash([]);}
     if(navigation.destination){const q=project(navigation.destination),x=clamp(q.x,12,348),y=clamp(q.y,12,228);ctx.strokeStyle='#ffe0a0';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#ffe0a0';ctx.fillRect(x-2,y-2,4,4);}
     ctx.save();ctx.translate(180,120);ctx.rotate(-(mode==='first'?yaw:followYaw));ctx.fillStyle='#bcded7';ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(5,6);ctx.lineTo(-5,6);ctx.closePath();ctx.fill();ctx.restore();
@@ -219,6 +220,7 @@ async function start(){
   function localContacts(){
     const body=riding?roverBody(roverState):walkerBody(player);
     const others=station.colliders.concat(flags.colliders,riding?[]:[roverBody(roverState,'self',false)]);
+    if(race)others.push(...race.obstacles());
     for(const [id,r] of remotes)for(const b of bodiesFor(id,r.target))others.push({...b,state:{...b.state},invMass:0});
     for(let pass=0;pass<2;pass++)for(const other of others)if(resolvePair(body,other,{predict:true}))predictedContacts++;
     if(riding){if(roverState.grounded)roverState.y=Math.max(roverState.y,landscape.groundAt(roverState.x,roverState.z));syncDriver();}
@@ -259,7 +261,7 @@ async function start(){
   }
 
   const landmarks=[{x:0,z:0,label:'Landing point',short:'LANDING'},{...station.entrance,label:'Research station entrance',short:'STATION'},...flags.exhibits.map((f,i)=>({x:f.x+.5,z:f.z+4,label:f.label,short:(i<6?'A'+[11,12,14,15,16,17][i]:'CE'+(i===6?5:6))+' FLAG',flag:true}))];
-  landmarks.push({...ARENA.gate,label:'Apogee race stadium entrance',short:'RACE ARENA'});
+  landmarks.push({...ARENA.gate,label:'Crater stadium entrance',short:'STADIUM'});
   const atlas=createAtlas({getState:()=>({player:{...player},navigation}),heightAt:landscape.heightAt,landmarks,onPin:setWaypoint,onOpen(){if(document.pointerLockElement)document.exitPointerLock();keys.clear();},onOrbit(site){if(!started)$('begin').click();setMode('orbit');universe.focusSite(site);$('orbit-site').textContent=`${site.name} · ${site.mission}`;},onStation(){
     if(!started)$('begin').click();
     riding=false;dismount=null;keys.clear();jumpRequested=false;const {x,z}=station.entrance;
@@ -282,6 +284,7 @@ async function start(){
   $('copy-invite').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(expedition.invite());toast('Invite copied. Send it to your friends and keep this tab open.');}catch{$('invite-link').focus();$('invite-link').select();toast('Select and copy the invite link.');}});
   window.addEventListener('beforeunload',()=>expedition.leave());
   function controls(){
+    if(race?.active()&&mode!=='orbit'){$('control-strip').innerHTML='<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>R</kbd> Ready</span><span><kbd>E</kbd> Get out</span>';return;}
     $('control-strip').innerHTML=mode==='orbit'?'<span><kbd>DRAG</kbd> Orbit</span><span><kbd>SCROLL</kbd> Zoom</span><span><kbd>1 / 2</kbd> Surface</span>':riding?'<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>E</kbd> Exit</span>':'<span><kbd>W A S D</kbd> Walk</span><span><kbd>SHIFT</kbd> Lope</span><span><kbd>F</kbd> Stone</span><span><kbd>G</kbd> Soil</span><span><kbd>B</kbd> Bag</span><span><kbd>HOLD T</kbd> Aim / throw</span><span><kbd>C</kbd> Costume</span><span><kbd>V</kbd> View</span>';
     $('touch-jump').textContent=riding?'BRAKE':'JUMP';
   }
@@ -387,7 +390,6 @@ async function start(){
   canvas.addEventListener('contextmenu',event=>event.preventDefault());
   const movementKeys=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space'];
   document.addEventListener('keydown',event=>{
-    if(race?.active())return;
     if(!started||modalOpen()||['INPUT','TEXTAREA'].includes(event.target.tagName))return;
     if((event.code==='Space'||event.code.startsWith('Arrow'))&&event.target.closest('button,summary,select'))return;
     if(movementKeys.includes(event.code))event.preventDefault();
@@ -396,14 +398,14 @@ async function start(){
     if(event.code==='KeyV'){const list=['first','follow','orbit'];setMode(list[(list.indexOf(mode)+1)%3]);}
     if(event.code==='KeyC')setCostume(costume===1?2:1);
     if(event.code==='KeyH'){hiddenUI=!hiddenUI;document.body.classList.toggle('ui-hidden',hiddenUI);}
-    if(event.code==='KeyE'){if(!riding&&Math.hypot(player.x-ARENA.gate.x,player.z-ARENA.gate.z)<16)race.open();else toggleRover();}
+    if(event.code==='KeyE'){if(!riding&&race.interact())return;else if(!riding&&Math.hypot(player.x-ARENA.gate.x,player.z-ARENA.gate.z)<45)race.open();else toggleRover();}
     if(event.code==='KeyM')atlas.open();
-    if(event.code==='KeyF')sampleAction('pick');
-    if(event.code==='KeyG')sampleAction('soil');
-    if(event.code==='KeyB')sampleAction('store');
-    if(event.code==='KeyT'){event.preventDefault();beginAim();}
+    if(event.code==='KeyF'&&!race.active())sampleAction('pick');
+    if(event.code==='KeyG'&&!race.active())sampleAction('soil');
+    if(event.code==='KeyB'&&!race.active())sampleAction('store');
+    if(event.code==='KeyT'&&!race.active()){event.preventDefault();beginAim();}
     if(event.code==='Escape')cancelAim();
-    if(event.code==='KeyR')sampleAction('retrieve');
+    if(event.code==='KeyR'&&!race.active())sampleAction('retrieve');
     if(event.code==='Space'&&mode!=='orbit')jumpRequested=true;
     keys.add(event.code);
   });
@@ -420,8 +422,8 @@ async function start(){
 
   function updateCamera(dt){
     if(mode==='first'){
-      const bob=!riding&&started&&player.grounded?Math.sin(player.distance*7)*Math.min(.018,player.speed*.012):0;
-      if(sampling.busy())camera.position.copy(astronaut.head.getWorldPosition(new THREE.Vector3())).add(new THREE.Vector3(0,-.035,0));
+      const bob=!riding&&!race?.active()&&started&&player.grounded?Math.sin(player.distance*7)*Math.min(.018,player.speed*.012):0;
+      if(sampling.busy()||race?.active())camera.position.copy(astronaut.head.getWorldPosition(new THREE.Vector3())).add(new THREE.Vector3(0,-.035,0));
       else camera.position.set(player.x,player.y+1.76+bob,player.z);
       camera.rotation.order='YXZ';camera.rotation.set(pitch,yaw,0,'YXZ');
       const task=sampling.person(expedition.identity())?.action;
@@ -498,14 +500,17 @@ async function start(){
   function animate(){
     requestAnimationFrame(animate);
     const dt=Math.min(clock.getDelta(),.08);expedition.update(performance.now()/1000);if(document.hidden)return;
-    race.update(dt);
-    if(race.active()){
-      sampling.update(dt,{...player,riding},false);
-      race.render(renderer);return;
+    race.update(dt,player,started&&mode!=='orbit');
+    const racePose=race.pose();
+    if(race.active()&&racePose){
+      const turn=lastRaceYaw===null?0:angleDelta(lastRaceYaw,racePose.yaw);yaw+=turn;followYaw+=turn;lastRaceYaw=racePose.yaw;
+      Object.assign(player,{x:racePose.x,y:racePose.y,z:racePose.z,yaw:racePose.yaw,vx:racePose.vx,vz:racePose.vz,vy:racePose.vy,speed:racePose.speed,grounded:racePose.grounded,landed:false});
+      terrain.update(player.x,player.z);
+      if(racePose.speed>.5&&racePose.grounded&&frames%10===0)terrain.wheelTrack({x:player.x+1.4*Math.cos(player.yaw),y:groundAt(player.x,player.z),z:player.z-1.4*Math.sin(player.yaw)},player.yaw);
     }
     elapsed+=dt;frames++;fpsTime+=dt;if(fpsTime>=1){fps=frames/fpsTime;frames=0;fpsTime=0;}
     if(pendingSampleUntil&&performance.now()>pendingSampleUntil){pendingSampleUntil=0;toast('Sampling request timed out. Try again when the host is active.');}
-    if(started&&mode!=='orbit'&&!modalOpen()&&!dismount&&!throwAim.active&&!sampling.busy()&&!pendingSampleUntil){
+    if(started&&!race.active()&&mode!=='orbit'&&!modalOpen()&&!dismount&&!throwAim.active&&!sampling.busy()&&!pendingSampleUntil){
       const inputX=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0),inputZ=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);
       const angle=mode==='first'?yaw:followYaw,fast=keys.has('ShiftLeft')||keys.has('ShiftRight');
       const input={x:Math.cos(angle)*inputX-Math.sin(angle)*inputZ,z:-Math.sin(angle)*inputX-Math.cos(angle)*inputZ,fast,jump:jumpRequested};
@@ -550,13 +555,13 @@ async function start(){
     // a newly streamed obstacle must never leave someone falling below terrain.
     if(started){
       enforceTerrainFloor(roverState,landscape.groundAt);
-      if(!riding&&!dismount)enforceTerrainFloor(player,landscape.groundAt);
+      if(!riding&&!dismount&&!race.active())enforceTerrainFloor(player,landscape.groundAt);
       else if(riding&&!dismount)syncDriver();
     }
-    sampling.update(started?dt:0,{...player,riding},started&&mode!=='orbit');
+    sampling.update(started?dt:0,{...player,riding:riding||race.active()},started&&mode!=='orbit');
     const samplePerson=sampling.person(expedition.identity()),task=samplePerson?.action;
     sound.sample(started&&mode!=='orbit'?task:null);
-    sound.update({active:started&&mode!=='orbit'&&!modalOpen(),riding: riding&&!dismount,speed:roverState.speed,grounded:roverState.grounded,aiming:throwAim.active,charge:throwAim.active?throwAim.snapshot().charge:0});
+    sound.update({active:started&&mode!=='orbit'&&!modalOpen(),riding:(riding&&!dismount)||race.active(),speed:race.active()?racePose?.speed/4||0:roverState.speed,grounded:race.active()?racePose?.grounded:roverState.grounded,aiming:throwAim.active,charge:throwAim.active?throwAim.snapshot().charge:0});
     if(throwPending&&!task&&!pendingSampleUntil)restoreAimView();
     if(task){player.vx=player.vz=player.speed=0;jumpRequested=false;accumulator=0;player.yaw+=angleDelta(player.yaw,task.origin.yaw)*Math.min(1,dt*14);}
     station.update(dt,[localState(),...[...remotes.values()].map(r=>r.current)]);
@@ -565,8 +570,9 @@ async function start(){
       dismount.progress=Math.min(1,dismount.progress+dt/DISMOUNT_SECONDS);Object.assign(player,exitPosition(dismount),{vx:0,vz:0,vy:0,speed:0});
       astronaut.updateDismount({...player,rover:roverState},dt,rover.driverPose(),dismount);
       if(dismount.progress>=1){Object.assign(player,dismount.to,{grounded:true,landed:false});dismount=null;riding=false;keys.clear();accumulator=0;controls();localContacts();toast('Back on foot. E to get back in.');}
-    }else if(riding)astronaut.updateSeated({...player,rover:roverState},dt,rover.driverPose());else astronaut.update({...player,sampling:!!task},dt,pitch);
+    }else if(race.active())astronaut.updateSeated(racePose||player,dt,race.driverPose(expedition.identity()));else if(riding)astronaut.updateSeated({...player,rover:roverState},dt,rover.driverPose());else astronaut.update({...player,sampling:!!task},dt,pitch);
     sampleRig.update({...player,aiming:throwAim.active},samplePerson,sampling.time());if(!task)player.landed=false;astronaut.root.visible=started&&mode!=='orbit';astronaut.head.visible=mode!=='first';
+    if(race.active()&&racePose?.dead)astronaut.root.visible=false;
     if(navigation.destination&&navigation.status==='ready'){
       Object.assign(navigation,remainingRoute(player,navigation.points));
       if(Math.hypot(player.x-navigation.destination.x,player.z-navigation.destination.z)<3){navigation.status='arrived';navigation.distance=0;sound.effect('confirm');toast('Objective reached: '+navigation.destination.label);}
@@ -576,22 +582,23 @@ async function start(){
     for(const [remoteId,remote] of remotes){
       const p=remote.motion.sample(performance.now())||remote.target;remote.current=p;
       remote.astronaut.setCostume(p.costume||1);
-      remote.astronaut.root.visible=started&&!p.arena&&Math.hypot(p.x-player.x,p.z-player.z)<300;
-      if(p.rover){remote.rover.root.visible=started&&!p.arena&&Math.hypot(p.rover.x-player.x,p.rover.z-player.z)<450;remote.rover.update(p.rover,dt);}else remote.rover.root.visible=false;
-      if(p.riding&&p.rover){if(p.dismount)remote.astronaut.updateDismount(p,dt,remote.rover.driverPose(),p.dismount);else remote.astronaut.updateSeated(p,dt,remote.rover.driverPose());}else remote.astronaut.update({...p,sampling:!!sampling.person(remoteId)?.action},dt);
+      const raceRemote=race.remotePose(remoteId),raceSeat=race.driverPose(remoteId),display=raceRemote||p;
+      remote.astronaut.root.visible=started&&mode!=='orbit'&&!raceRemote?.dead&&Math.hypot(display.x-player.x,display.z-player.z)<300;
+      if(p.rover){remote.rover.root.visible=started&&Math.hypot(p.rover.x-player.x,p.rover.z-player.z)<450;remote.rover.update(p.rover,dt);}else remote.rover.root.visible=false;
+      if(raceSeat&&raceRemote)remote.astronaut.updateSeated(raceRemote,dt,raceSeat);else if(p.riding&&p.rover){if(p.dismount)remote.astronaut.updateDismount(p,dt,remote.rover.driverPose(),p.dismount);else remote.astronaut.updateSeated(p,dt,remote.rover.driverPose());}else remote.astronaut.update({...p,sampling:!!sampling.person(remoteId)?.action},dt);
       remote.sampleRig.update(p,sampling.person(remoteId),sampling.time());
-      remote.label.visible=remote.astronaut.root.visible;remote.label.position.set(p.x,p.y+2.48,p.z);
+      remote.label.visible=remote.astronaut.root.visible;remote.label.position.set(display.x,display.y+3.2,display.z);
     }
     if(mode==='orbit'){universe.update(dt);updateLabels();renderer.render(universe.scene,universe.camera);}
     else{updateCamera(dt);renderer.render(scene,camera);}
     uiTime+=dt;if(started&&uiTime>.15){updateHUD();uiTime=0;}
   }
   // Read-only diagnostic snapshot used by the local integration checks.
-  race=createRacing({scene,groundAt:landscape.groundAt,network:expedition,sound,toast,
-    canEnter:()=>{if(!started)return false;if(dismount||sampling.busy()){toast('Finish your current action before entering the arena.');return false;}return true;},
-    onEnter:()=>{cancelAim();keys.clear();accumulator=0;player.vx=player.vz=player.speed=0;roverState.vx=roverState.vz=roverState.speed=0;if(mode==='orbit')setMode('follow');},
-    onExit:()=>{keys.clear();accumulator=0;controls();toast('Back at your explorer. Open RACE to return to the stadium.');},
-    onRoute:setWaypoint});
+  race=createRacing({scene,groundAt:landscape.groundAt,makeRock:terrain.sampleMesh,network:expedition,sound,toast,getPlayer:()=>player,
+    canBoard:()=>{if(!started||riding||dismount||sampling.busy()||sampling.held()){toast('Get out of your buggy and stow your sample before boarding.');return false;}return true;},
+    onEnter:p=>{cancelAim();keys.clear();accumulator=0;lastRaceYaw=p.yaw;followYaw=yaw=p.yaw;setMode('follow');controls();targetFollowDistance=9.5;followPitch=.27;toast('W/S drive · A/D steer · Space brake · R ready · E get out. Open STADIUM for friends and race start.');},
+    onExit:p=>{keys.clear();accumulator=0;lastRaceYaw=null;if(p){const x=p.x+Math.cos(p.yaw)*3.2,z=p.z-Math.sin(p.yaw)*3.2;Object.assign(player,{x,z,y:groundAt(x,z),vx:0,vz:0,vy:0,speed:0,grounded:true});terrain.update(x,z);}targetFollowDistance=4.6;controls();toast('Back on foot beside the vehicle.');},
+    openCrew:()=>{$('crew-button').click();},onRoute:setWaypoint});
   window.seleneRace=Object.freeze({snapshot:race.snapshot});
   window.seleneSound=Object.freeze({snapshot:sound.snapshot});
   window.selene=Object.freeze({snapshot:()=>({aim:throwAim.snapshot(),streaming:terrain.streaming(),costume,samples:sampling.snapshot(),ready,started,mode,riding,dismount:dismount?{...dismount}:null,navigation:{...navigation,points:navigation.points.map(p=>({...p}))},flagExhibits:flags.exhibits.map(f=>({id:f.id,x:f.x,z:f.z,design:f.design})),avatarPosition:astronaut.root.position.toArray(),handErrors:astronaut.handErrors(),station:station.snapshot(),atlas:atlas.snapshot(),predictedContacts,renderedRemotes:[...remotes.values()].map(r=>({name:r.name,state:r.current,handErrors:r.astronaut.handErrors(),samples:r.motion.samples.length})),rover:{...roverState},network:expedition.snapshot(),remoteCount:remotes.size,nearbyRocks:terrain.rocks.filter(r=>Math.hypot(r.x-player.x,r.z-player.z)<20).map(r=>({...r})),player:{...player},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},orbitDistance:universe.state.distance,targetOrbitDistance:universe.state.targetDistance,moonRadius:MOON_RADIUS,earthDistance:EARTH_DISTANCE,footsteps:footstepCount,feet:astronaut.legs.map(l=>({position:l.world.toArray(),swing:l.swing,kneeQuaternion:l.lower.quaternion.toArray(),hipQuaternion:l.upper.quaternion.toArray()})),fps,ground:groundAt(player.x,player.z),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})});

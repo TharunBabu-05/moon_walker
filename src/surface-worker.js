@@ -2,6 +2,7 @@ import * as THREE from '../vendor/three.module.js';
 import {createLandscape,noise,hash,randomGenerator} from './landscape.js';
 import {FLAG_EXHIBITS} from './lunar-sites.js';
 import {planRoute} from './navigation.js';
+import {clearRaceLane} from './stadium-layout.js';
 const landscape=createLandscape(),dummy=new THREE.Object3D();
 const terrainIndices=[];
 for(let level=0;level<10;level++){
@@ -26,6 +27,7 @@ function terrain({x,z}){
 function rocks({x,z,heights}){
   const cx=Math.floor(x/64),cz=Math.floor(z/64),records=[];
   function add(wx,wz,radius,yaw,variant){
+    if(radius>.32&&clearRaceLane(wx,wz))return;
     if(FLAG_EXHIBITS.some(e=>Math.hypot(wx-e.x,wz-e.z)<3+radius)||Math.abs(wx+25)<19+radius&&Math.abs(wz-28)<20+radius||Math.hypot(wx,wz)<2.7||Math.hypot(wx-3,wz-2)<3.5||Math.hypot(wx+4,wz-5)<1)return;
     const bottom=Math.min(landscape.groundAt(wx,wz),landscape.groundAt(wx+radius*.55,wz),landscape.groundAt(wx-radius*.55,wz),landscape.groundAt(wx,wz+radius*.55),landscape.groundAt(wx,wz-radius*.55))-radius*.15;
     records.push({x:wx,z:wz,radius,yaw,variant,bottom,top:bottom+heights[variant]*radius});

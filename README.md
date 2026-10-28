@@ -116,18 +116,25 @@ SELENE Research Outpost is a fictional surface habitat informed by NASA lunar in
 
 Implementation decisions and primary references: [Research notes](RESEARCH.md).
 
-## Apogee racing stadium
+## Crater stadium: race with your crew
 
-Open **RACE** in the top-right tools, select a car, and choose **Enter stadium**. **Route to entrance** adds a waypoint to the surface map; the terminal is exactly 300 m east of the habitat centre. Walk within 16 m and press **E** to open its garage. The fictional stadium has a **3 km radius** (6 km diameter), with its near edge at the terminal. It loads as a separate arena scene to keep the detailed exploration terrain and racing performance independent; leaving restores your explorer at the previous position.
+The stadium is a permanent structure on the exploration Moon, with a **1.2 km radius**, 95 roofed grandstand sections, floodlight towers and roughly 19,000 seated spacesuit spectators. Its entrance is **300 m east of the habitat centre**. It uses the same scene, terrain mesh, lighting and ground physics as exploration. There is no portal, separate arena scene, or remote boarding button.
 
-- Four coloured chassis: Ion interceptor, six-wheel Scarab, split-wing Viper, and Comet rocket rally car. Each has different acceleration, grip and top speed.
-- **W/S** drive/reverse, **A/D** steer, **Space** brake, **Shift** spend rechargeable boost, **F** fire, **Q** switch Pulse/Rail weapons. Touch driving controls appear on touch devices.
-- Two laps through 24 ordered checkpoints. The winding circuit includes launch ramps, potholes, solid barriers, boost pads and fictional engineered coolant pools. Going off the track also slows the car. The minimap shows racers and the next gate.
-- Arena-only combat: 100 hull points, impacts and explosions, knockout/death counts, and a **4-second respawn at the destruction position**, followed by a 2-second shield. There is no damage to explorers outside the arena.
-- Solo racers can enable three practice opponents. For multiplayer, host/join the same **CREW** expedition first; each participant then selects a car and enters. Up to eight racers share the host's fixed-step driving, collisions, checkpoint and damage simulation. Guests send controls, not hit claims; remote cars use buffered interpolation and the local guest car predicts steering/driving. The host must keep the tab active. Host migration, persistent race results and ranked matchmaking are not implemented.
-- Driving is an arcade model with lunar gravity, bounded track collisions and terrain contact, not a full tyre or multibody engineering simulator. Stadium structures are instanced and rigid car geometry is batched. No game audio/assets were extracted from the inspiration games.
+1. Open **STADIUM** in the top-right tools. Choose **Host / join CREW**; one friend hosts and copies the invite link, and the others join that expedition.
+2. Choose **Route to parked vehicles**. Walk or use the exploration buggy to reach the stadium paddock. Get out of the exploration buggy, stow any held sample, and approach one of the eight parked racers.
+3. Press **E** within 6 m to board. Each driver presses **R** or **Ready**. The lobby shows everyone in the crew, their vehicle and readiness.
+4. The host clicks **Host: start race**. All drivers share a five-second countdown and two laps through 16 ordered checkpoints. **Solo practice** is available when playing alone.
+5. **W/S** drives/reverses, **A/D** steers, **Space** brakes, and **E** gets out after stopping. **1/2/3** retains the existing camera modes. You step out beside the vehicle where it stopped.
 
-Race checks: `npm run test:racing`, `npm run test:racing-browser`, and `npm run test:racing-multiplayer` (the latter requires the PeerJS signalling service). Set `SELENE_LOCAL_SIGNAL=1` to test real browser RTCDataChannels using a local signalling fixture when the public service is unavailable. The fixture is never loaded by the game. Race unit checks also run with `npm test`.
+The four exposed-frame designs are Rustwalker, six-wheel Iron Mule, roofed Dune Jackal and Red Prospector. They use muted copper, green, gray and red finishes, oversized wheels, articulated wishbones, visible coil springs/dampers, roll cages, batteries and cargo. Driver hands follow the steering grips.
+
+The route crosses raw regolith, crater slopes, depressions and large rock arches. Sparse survey stakes and checkpoint signs mark the route; there is no asphalt ribbon. Amber ground rings warn of falling boulders. Falling rocks and racer impacts damage vehicles; destruction triggers a **four-second recovery at the destruction position**, followed by two seconds of protection. Unoccupied vehicles and arch pillars remain solid. The previous separate-scene circuit, weapons, boost pads and AI opponents have been removed.
+
+The host runs the shared 60 Hz race simulation independently of rendering and sends snapshots at up to 20 Hz. Guests predict their controls and reconcile on packet arrival; remote vehicles use buffered interpolation. The host should keep the game open and active. There is no host migration, dedicated server, ranked matchmaking or persistent race history. This is game vehicle physics with lunar gravity and terrain contact, not a full engineering tyre simulation.
+
+Stadium geometry is instanced or batched; detailed crowd sections and car geometry appear nearby, with simpler distant representations. Browser performance still depends on the GPU and chosen detail setting.
+
+Race checks: `npm run test:racing`, `npm run test:racing-browser`, and `npm run test:racing-multiplayer`. Browser race fixtures start test explorers beside the paddock to exercise boarding without a long approach; production has no teleport. The multiplayer check uses real browser RTCDataChannels. Set `SELENE_LOCAL_SIGNAL=1` to exchange test signalling locally if the public PeerJS service is unavailable. The signalling and spawn fixtures are never loaded by the production game.
 
 ## Checks
 

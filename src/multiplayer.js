@@ -2,7 +2,7 @@ import {reconcileContacts} from './contacts.js';
 export const MAX_CREW=8;
 // Changing the wire contract requires a fresh room so an older client cannot
 // silently omit pose fields that affect shared animation.
-const PROTOCOL=10;
+const PROTOCOL=11;
 const PREFIX=`selene-expedition-${PROTOCOL}-`;
 const numeric=['x','y','z','vx','vy','vz','yaw','speed','distance'];
 
@@ -119,8 +119,9 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
           if(session!==generation||!data||typeof data!=='object')return;
           if(host){
             if(data.type==='race-request'&&members.has(link.peer)){
-              const member=members.get(link.peer),now=performance.now(),field=data.request?.type==='input'?'lastRaceInput':'lastRaceControl';if(now-(member[field]||0)<(field==='lastRaceInput'?25:200))return;member[field]=now;
-              onRaceRequest(link.peer,data.request,member.name);return;
+              const type=data.request?.type;if(!['input','join','leave','ready','start','practice','end'].includes(type))return;
+              const member=members.get(link.peer),now=performance.now(),field=type==='input'?'lastRaceInput':'raceControl-'+type;if(now-(member[field]||0)<(type==='input'?25:200))return;member[field]=now;
+              const notice=onRaceRequest(link.peer,data.request,member.name);if(notice)send(link,{type:'race-notice',message:notice});return;
             }
             if(data.type==='sample-request'&&members.has(link.peer)){
               const member=members.get(link.peer),now=performance.now();if(now-(member.lastSampleRequest||0)<250)return;member.lastSampleRequest=now;
@@ -134,7 +135,7 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
             pending.delete(link.peer);Object.assign(member,{state,stamp:data.stamp,seq:data.seq});publishRoster();
           }else if(data.type==='race-world')onRaceWorld(data.world);
           else if(data.type==='sample-world')onSampleWorld(data.world);
-          else if(data.type==='sample-notice')onNotice(String(data.message).slice(0,160));
+          else if(data.type==='sample-notice'||data.type==='race-notice')onNotice(String(data.message).slice(0,160));
           else if(data.type==='welcome'&&Number.isFinite(data.spawn?.x)&&Number.isFinite(data.spawn?.z))onSpawn(data.spawn);
           else if(data.type==='world'&&Array.isArray(data.members)){
             members.clear();
@@ -164,7 +165,7 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
   return {
     identity:()=>phase==='connected'?peer.id:'solo',
     authority:()=>host||phase!=='connected',
-    requestRace(request){if(host||phase!=='connected')onRaceRequest(phase==='connected'?peer.id:'solo',request,name);else for(const link of links.values())send(link,{type:'race-request',request});},
+    requestRace(request){if(host||phase!=='connected'){const notice=onRaceRequest(phase==='connected'?peer.id:'solo',request,name);if(notice)onNotice(notice);}else for(const link of links.values()){if(request.type==='join')send(link,{type:'state',...payload()});send(link,{type:'race-request',request});}},
     publishRace(world){if(host&&phase==='connected')broadcast({type:'race-world',world});},
     sampleEntries:()=>[{id:phase==='connected'?peer.id:'solo',state:getState()},...[...members].filter(([,m])=>m.state).map(([id,m])=>({id,state:m.state}))],
     requestSample(request){if(host||phase!=='connected'){const error=onSampleRequest(phase==='connected'?peer.id:'solo',getState(),request);if(error)onNotice(error);}else for(const link of links.values()){send(link,{type:'state',...payload()});send(link,{type:'sample-request',request});}},

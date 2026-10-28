@@ -1,3 +1,4 @@
+import {STADIUM,stadiumSurface} from './stadium-layout.js';
 const mix=(a,b,t)=>a+(b-a)*t;
 const smoothstep=(x,a,b)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
 export function randomGenerator(seed=8419){return()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
@@ -43,10 +44,11 @@ export function createLandscape(){
     return h;
   }
   const padHeight=rawHeightAt(-25,28);
+  const stadiumAnchor=rawHeightAt(STADIUM.x,STADIUM.z);
   function heightAt(x,z){
     const d=Math.hypot((x+25)/20,(z-28)/22);
     const blend=smoothstep(d,.9,2.5);
-    return mix(padHeight,rawHeightAt(x,z),blend);
+    return stadiumSurface(x,z,mix(padHeight,rawHeightAt(x,z),blend),stadiumAnchor);
   }
   // Sample exactly the triangle interpolation of the finest (0.5 m) mesh.
   const groundSamples=new Map();
