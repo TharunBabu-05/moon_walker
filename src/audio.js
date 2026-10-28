@@ -45,6 +45,11 @@ export function createAudio(){
   }
   function effect(type,strength=1,pan=0){
     if(!context)return;const now=context.currentTime;if(now-(cooldowns.get(type)??-10)<.08)return;cooldowns.set(type,now);
+    if(type==='raceFire'||type==='raceExplosion'){
+      const osc=context.createOscillator(),level=context.createGain(),blast=type==='raceExplosion';
+      osc.type=blast?'sawtooth':'triangle';osc.frequency.setValueAtTime(blast?110:940,now);osc.frequency.exponentialRampToValueAtTime(blast?25:180,now+(blast?.45:.12));
+      level.gain.setValueAtTime(.065*strength,now);level.gain.exponentialRampToValueAtTime(.0001,now+(blast?.5:.14));osc.connect(level);level.connect(master);osc.start(now);osc.stop(now+(blast?.52:.16));osc.onended=()=>{osc.disconnect();level.disconnect();};return;
+    }
     const table={ui:['click_001',.18],confirm:['confirmation_001',.22],suit:['footstep_carpet_000',.23],pick:['impactMining_001',.22],bag:['impactSoft_medium_000',.36],shovel:['impactMetal_light_000',.16],scoop:['footstep_snow_002',.32],pour:['footstep_snow_003',.3],throw:['footstep_carpet_000',.35],bounce:['impactMining_000',.32],hit:['impactSoft_heavy_000',.5],land:['impactSoft_heavy_000',.4],jump:['footstep_carpet_000',.25],board:['switch_001',.3],door:['impactMetal_light_000',.25],step:['footstep_snow_001',.28],collision:['impactGeneric_light_000',.4],error:['error_001',.18]};
     const [name,volume]=table[type]||table.ui;play(name,volume*clamp(strength,0,1.5),.94+Math.random()*.12,pan);
   }

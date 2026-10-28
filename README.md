@@ -116,6 +116,19 @@ SELENE Research Outpost is a fictional surface habitat informed by NASA lunar in
 
 Implementation decisions and primary references: [Research notes](RESEARCH.md).
 
+## Apogee racing stadium
+
+Open **RACE** in the top-right tools, select a car, and choose **Enter stadium**. **Route to entrance** adds a waypoint to the surface map; the terminal is exactly 300 m east of the habitat centre. Walk within 16 m and press **E** to open its garage. The fictional stadium has a **3 km radius** (6 km diameter), with its near edge at the terminal. It loads as a separate arena scene to keep the detailed exploration terrain and racing performance independent; leaving restores your explorer at the previous position.
+
+- Four coloured chassis: Ion interceptor, six-wheel Scarab, split-wing Viper, and Comet rocket rally car. Each has different acceleration, grip and top speed.
+- **W/S** drive/reverse, **A/D** steer, **Space** brake, **Shift** spend rechargeable boost, **F** fire, **Q** switch Pulse/Rail weapons. Touch driving controls appear on touch devices.
+- Two laps through 24 ordered checkpoints. The winding circuit includes launch ramps, potholes, solid barriers, boost pads and fictional engineered coolant pools. Going off the track also slows the car. The minimap shows racers and the next gate.
+- Arena-only combat: 100 hull points, impacts and explosions, knockout/death counts, and a **4-second respawn at the destruction position**, followed by a 2-second shield. There is no damage to explorers outside the arena.
+- Solo racers can enable three practice opponents. For multiplayer, host/join the same **CREW** expedition first; each participant then selects a car and enters. Up to eight racers share the host's fixed-step driving, collisions, checkpoint and damage simulation. Guests send controls, not hit claims; remote cars use buffered interpolation and the local guest car predicts steering/driving. The host must keep the tab active. Host migration, persistent race results and ranked matchmaking are not implemented.
+- Driving is an arcade model with lunar gravity, bounded track collisions and terrain contact, not a full tyre or multibody engineering simulator. Stadium structures are instanced and rigid car geometry is batched. No game audio/assets were extracted from the inspiration games.
+
+Race checks: `npm run test:racing`, `npm run test:racing-browser`, and `npm run test:racing-multiplayer` (the latter requires the PeerJS signalling service). Set `SELENE_LOCAL_SIGNAL=1` to test real browser RTCDataChannels using a local signalling fixture when the public service is unavailable. The fixture is never loaded by the game. Race unit checks also run with `npm test`.
+
 ## Checks
 
 ```powershell

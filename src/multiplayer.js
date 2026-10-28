@@ -2,7 +2,7 @@ import {reconcileContacts} from './contacts.js';
 export const MAX_CREW=8;
 // Changing the wire contract requires a fresh room so an older client cannot
 // silently omit pose fields that affect shared animation.
-const PROTOCOL=9;
+const PROTOCOL=10;
 const PREFIX=`selene-expedition-${PROTOCOL}-`;
 const numeric=['x','y','z','vx','vy','vz','yaw','speed','distance'];
 
@@ -13,6 +13,7 @@ export function sanitizeState(value){
   if(Math.abs(p.x)>11020||Math.abs(p.z)>11020||Math.abs(p.y)>5000||p.speed<0||p.speed>40)return null;
   p.grounded=!!value.grounded;p.riding=!!value.riding;p.aiming=!!value.aiming;p.landed=false;p.landingSpeed=0;
   p.costume=value.costume===2?2:1;
+  p.arena=!!value.arena;
   p.ack=Number.isSafeInteger(value.ack)?value.ack:0;
   if(value.dismount&&p.riding){const d=value.dismount;if(Number.isFinite(d.progress)&&d.progress>=0&&d.progress<=1&&[d.from,d.to].every(v=>v&&['x','y','z','yaw'].every(k=>Number.isFinite(v[k])))&&Math.hypot(d.from.x-d.to.x,d.from.z-d.to.z)<5)p.dismount={progress:d.progress,side:d.side===1?1:-1,from:{...d.from},to:{...d.to}};}
   if(value.rover&&typeof value.rover==='object'){
@@ -37,7 +38,7 @@ async function loadPeer(){
   return library;
 }
 
-export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,onCorrection=()=>{},onSampleRequest=()=>{},onSampleWorld=()=>{},onSampleReset=()=>{}}){
+export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,onCorrection=()=>{},onSampleRequest=()=>{},onSampleWorld=()=>{},onSampleReset=()=>{},onRaceRequest=()=>{},onRaceWorld=()=>{},onRaceReset=()=>{}}){
   let peer=null,host=false,code='',name='Explorer',phase='solo',message='Explore solo, or invite a crew.',lastSend=0,generation=0;
   const links=new Map(),members=new Map(),pending=new Map();let connectionTimer,lastBroadcast=-Infinity,sequence=0,ack=0,correctionSerial=0,contactCount=0;
   const notify=()=>onChange({phase,host,code,name,message,count:phase==='connected'?members.size+1:1,max:MAX_CREW});
@@ -49,6 +50,7 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
     if(host)broadcast({type:'ended'});
     for(const link of links.values())link.close();links.clear();peer?.destroy();peer=null;
     members.clear();pending.clear();sequence=ack=correctionSerial=contactCount=0;host=false;code='';phase='solo';message='Explore solo, or invite a crew.';onSampleReset();roster();notify();
+    onRaceReset();
     if(showNotice)onNotice('You left the expedition. Continue exploring solo.');
   }
   function fail(text){disconnect();phase='error';message=text;notify();}
@@ -116,6 +118,10 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
         link.on('data',data=>{
           if(session!==generation||!data||typeof data!=='object')return;
           if(host){
+            if(data.type==='race-request'&&members.has(link.peer)){
+              const member=members.get(link.peer),now=performance.now(),field=data.request?.type==='input'?'lastRaceInput':'lastRaceControl';if(now-(member[field]||0)<(field==='lastRaceInput'?25:200))return;member[field]=now;
+              onRaceRequest(link.peer,data.request,member.name);return;
+            }
             if(data.type==='sample-request'&&members.has(link.peer)){
               const member=members.get(link.peer),now=performance.now();if(now-(member.lastSampleRequest||0)<250)return;member.lastSampleRequest=now;
               const error=onSampleRequest(link.peer,member.state,data.request);if(error)send(link,{type:'sample-notice',message:error});return;
@@ -126,7 +132,8 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
             const correction=pending.get(link.peer);
             if(correction&&state.ack<correction.serial&&performance.now()-correction.since<1500)return;
             pending.delete(link.peer);Object.assign(member,{state,stamp:data.stamp,seq:data.seq});publishRoster();
-          }else if(data.type==='sample-world')onSampleWorld(data.world);
+          }else if(data.type==='race-world')onRaceWorld(data.world);
+          else if(data.type==='sample-world')onSampleWorld(data.world);
           else if(data.type==='sample-notice')onNotice(String(data.message).slice(0,160));
           else if(data.type==='welcome'&&Number.isFinite(data.spawn?.x)&&Number.isFinite(data.spawn?.z))onSpawn(data.spawn);
           else if(data.type==='world'&&Array.isArray(data.members)){
@@ -157,6 +164,8 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
   return {
     identity:()=>phase==='connected'?peer.id:'solo',
     authority:()=>host||phase!=='connected',
+    requestRace(request){if(host||phase!=='connected')onRaceRequest(phase==='connected'?peer.id:'solo',request,name);else for(const link of links.values())send(link,{type:'race-request',request});},
+    publishRace(world){if(host&&phase==='connected')broadcast({type:'race-world',world});},
     sampleEntries:()=>[{id:phase==='connected'?peer.id:'solo',state:getState()},...[...members].filter(([,m])=>m.state).map(([id,m])=>({id,state:m.state}))],
     requestSample(request){if(host||phase!=='connected'){const error=onSampleRequest(phase==='connected'?peer.id:'solo',getState(),request);if(error)onNotice(error);}else for(const link of links.values()){send(link,{type:'state',...payload()});send(link,{type:'sample-request',request});}},
     publishSamples(world){

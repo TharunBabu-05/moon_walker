@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:racing": "node --test checks/racing.test.mjs",
+    "test:racing-browser": "node checks/racing-browser.mjs",
+    "test:racing-multiplayer": "node checks/racing-multiplayer.mjs",
+    "postcheck": "node --check src/race-physics.js && node --check src/race-models.js && node --check src/racing.js",
+    "posttest": "node --test checks/racing.test.mjs",
     "precheck": "node --check src/audio.js && node --check src/hud-layout.js",
     "start": "node server.mjs",
     "prepare:assets": "node scripts/prepare-assets.mjs",

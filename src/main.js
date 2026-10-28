@@ -20,6 +20,8 @@ import {createThrowAim} from './throw-aim.js';
 import {MISSIONS,missionAt,SAMPLE_DEPOT} from './missions.js';
 import {createHUDLayout} from './hud-layout.js';
 import {createAudio} from './audio.js';
+import {createRacing} from './racing.js';
+import {ARENA} from './race-physics.js';
 
 const $=id=>document.getElementById(id);
 const canvas=$('scene');
@@ -28,6 +30,7 @@ window.addEventListener('unhandledrejection',event=>failure(event.reason));
 try { await start(); } catch(error) {failure(error);}
 
 async function start(){
+  let race;
   createHUDLayout();
   const sound=createAudio();
   const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
@@ -94,19 +97,20 @@ async function start(){
     const dot=(x,z,color,size)=>{const px=180+(x-player.x)*360/mapSpan,pz=120+(z-player.z)*360/mapSpan;if(px<5||px>355||pz<5||pz>235)return;ctx.fillStyle=color;ctx.fillRect(px-size/2,pz-size/2,size,size);};
     dot(roverState.x,roverState.z,'#d7b678',7);for(const remote of remotes.values())dot(remote.current.x,remote.current.z,'#b8e4d5',5);
     const mission=sampling?.person(expedition.identity())?.mission,assignment=missionAt(mission);
-    if(assignment&&['collect','return'].includes(mission.stage)){
+    if(mission&&assignment&&['collect','return'].includes(mission.stage)){
       const point=mission.stage==='return'?SAMPLE_DEPOT:assignment;
       dot(point.x,point.z,'#f4d397',9);
     }
     dot(-25,28,'#ffffff',10);
+    dot(ARENA.gate.x,ARENA.gate.z,'#55e5df',9);
     for(const flag of flags.exhibits)dot(flag.x,flag.z,'#cbb58c',4);
   }
   function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>$('toast').classList.remove('visible'),3500);}
-  const modalOpen=()=>$('help').open||$('crew-dialog').open||$('atlas-dialog').open||$('audio-dialog').open;
+  const modalOpen=()=>$('help').open||$('crew-dialog').open||$('atlas-dialog').open||$('audio-dialog').open||$('race-dialog')?.open;
   const remotes=new Map();let rosterSignature='',sampling,pendingSampleUntil=0;
   const localState=()=>{
     const active=started&&mode!=='orbit'&&!modalOpen()&&!document.hidden;
-    return {...player,costume,aiming:aimingActive,riding,dismount:dismount?{...dismount}:undefined,vx:active?player.vx:0,vz:active?player.vz:0,vy:active?player.vy:0,speed:active?player.speed:0,rover:{...roverState,vx:active&&riding?roverState.vx:0,vz:active&&riding?roverState.vz:0,vy:active&&riding?roverState.vy:0,speed:active&&riding?roverState.speed:0}};
+    return {...player,arena:!!race?.active(),costume,aiming:aimingActive,riding,dismount:dismount?{...dismount}:undefined,vx:active?player.vx:0,vz:active?player.vz:0,vy:active?player.vy:0,speed:active?player.speed:0,rover:{...roverState,vx:active&&riding?roverState.vx:0,vz:active&&riding?roverState.vz:0,vy:active&&riding?roverState.vy:0,speed:active&&riding?roverState.speed:0}};
   };
   const expedition=createExpedition({
     getState:localState,
@@ -157,6 +161,9 @@ async function start(){
     onSampleRequest:(id,state,request)=>sampling?.request(id,state,request),
     onSampleWorld:data=>{sampling?.accept(data);if(sampling?.busy())pendingSampleUntil=0;},
     onSampleReset:()=>{sampling?.reset();pendingSampleUntil=0;},
+    onRaceRequest:(id,request,name)=>race?.request(id,request,name),
+    onRaceWorld:data=>race?.accept(data),
+    onRaceReset:()=>race?.reset(),
     onCorrection(change){
       for(const kind of ['player','rover'])if(change[kind]){const body=kind==='player'?player:roverState;for(const key of ['x','z','vx','vz'])body[key]+=change[kind][key];body.speed=Math.hypot(body.vx,body.vz);if(body.grounded)body.y=(kind==='player'?groundAt:landscape.groundAt)(body.x,body.z);}
       if(riding&&!dismount)syncDriver();
@@ -252,6 +259,7 @@ async function start(){
   }
 
   const landmarks=[{x:0,z:0,label:'Landing point',short:'LANDING'},{...station.entrance,label:'Research station entrance',short:'STATION'},...flags.exhibits.map((f,i)=>({x:f.x+.5,z:f.z+4,label:f.label,short:(i<6?'A'+[11,12,14,15,16,17][i]:'CE'+(i===6?5:6))+' FLAG',flag:true}))];
+  landmarks.push({...ARENA.gate,label:'Apogee race stadium entrance',short:'RACE ARENA'});
   const atlas=createAtlas({getState:()=>({player:{...player},navigation}),heightAt:landscape.heightAt,landmarks,onPin:setWaypoint,onOpen(){if(document.pointerLockElement)document.exitPointerLock();keys.clear();},onOrbit(site){if(!started)$('begin').click();setMode('orbit');universe.focusSite(site);$('orbit-site').textContent=`${site.name} · ${site.mission}`;},onStation(){
     if(!started)$('begin').click();
     riding=false;dismount=null;keys.clear();jumpRequested=false;const {x,z}=station.entrance;
@@ -379,6 +387,7 @@ async function start(){
   canvas.addEventListener('contextmenu',event=>event.preventDefault());
   const movementKeys=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space'];
   document.addEventListener('keydown',event=>{
+    if(race?.active())return;
     if(!started||modalOpen()||['INPUT','TEXTAREA'].includes(event.target.tagName))return;
     if((event.code==='Space'||event.code.startsWith('Arrow'))&&event.target.closest('button,summary,select'))return;
     if(movementKeys.includes(event.code))event.preventDefault();
@@ -387,7 +396,7 @@ async function start(){
     if(event.code==='KeyV'){const list=['first','follow','orbit'];setMode(list[(list.indexOf(mode)+1)%3]);}
     if(event.code==='KeyC')setCostume(costume===1?2:1);
     if(event.code==='KeyH'){hiddenUI=!hiddenUI;document.body.classList.toggle('ui-hidden',hiddenUI);}
-    if(event.code==='KeyE')toggleRover();
+    if(event.code==='KeyE'){if(!riding&&Math.hypot(player.x-ARENA.gate.x,player.z-ARENA.gate.z)<16)race.open();else toggleRover();}
     if(event.code==='KeyM')atlas.open();
     if(event.code==='KeyF')sampleAction('pick');
     if(event.code==='KeyG')sampleAction('soil');
@@ -489,6 +498,11 @@ async function start(){
   function animate(){
     requestAnimationFrame(animate);
     const dt=Math.min(clock.getDelta(),.08);expedition.update(performance.now()/1000);if(document.hidden)return;
+    race.update(dt);
+    if(race.active()){
+      sampling.update(dt,{...player,riding},false);
+      race.render(renderer);return;
+    }
     elapsed+=dt;frames++;fpsTime+=dt;if(fpsTime>=1){fps=frames/fpsTime;frames=0;fpsTime=0;}
     if(pendingSampleUntil&&performance.now()>pendingSampleUntil){pendingSampleUntil=0;toast('Sampling request timed out. Try again when the host is active.');}
     if(started&&mode!=='orbit'&&!modalOpen()&&!dismount&&!throwAim.active&&!sampling.busy()&&!pendingSampleUntil){
@@ -562,8 +576,8 @@ async function start(){
     for(const [remoteId,remote] of remotes){
       const p=remote.motion.sample(performance.now())||remote.target;remote.current=p;
       remote.astronaut.setCostume(p.costume||1);
-      remote.astronaut.root.visible=started&&Math.hypot(p.x-player.x,p.z-player.z)<300;
-      if(p.rover){remote.rover.root.visible=started&&Math.hypot(p.rover.x-player.x,p.rover.z-player.z)<450;remote.rover.update(p.rover,dt);}else remote.rover.root.visible=false;
+      remote.astronaut.root.visible=started&&!p.arena&&Math.hypot(p.x-player.x,p.z-player.z)<300;
+      if(p.rover){remote.rover.root.visible=started&&!p.arena&&Math.hypot(p.rover.x-player.x,p.rover.z-player.z)<450;remote.rover.update(p.rover,dt);}else remote.rover.root.visible=false;
       if(p.riding&&p.rover){if(p.dismount)remote.astronaut.updateDismount(p,dt,remote.rover.driverPose(),p.dismount);else remote.astronaut.updateSeated(p,dt,remote.rover.driverPose());}else remote.astronaut.update({...p,sampling:!!sampling.person(remoteId)?.action},dt);
       remote.sampleRig.update(p,sampling.person(remoteId),sampling.time());
       remote.label.visible=remote.astronaut.root.visible;remote.label.position.set(p.x,p.y+2.48,p.z);
@@ -573,6 +587,12 @@ async function start(){
     uiTime+=dt;if(started&&uiTime>.15){updateHUD();uiTime=0;}
   }
   // Read-only diagnostic snapshot used by the local integration checks.
+  race=createRacing({scene,groundAt:landscape.groundAt,network:expedition,sound,toast,
+    canEnter:()=>{if(!started)return false;if(dismount||sampling.busy()){toast('Finish your current action before entering the arena.');return false;}return true;},
+    onEnter:()=>{cancelAim();keys.clear();accumulator=0;player.vx=player.vz=player.speed=0;roverState.vx=roverState.vz=roverState.speed=0;if(mode==='orbit')setMode('follow');},
+    onExit:()=>{keys.clear();accumulator=0;controls();toast('Back at your explorer. Open RACE to return to the stadium.');},
+    onRoute:setWaypoint});
+  window.seleneRace=Object.freeze({snapshot:race.snapshot});
   window.seleneSound=Object.freeze({snapshot:sound.snapshot});
   window.selene=Object.freeze({snapshot:()=>({aim:throwAim.snapshot(),streaming:terrain.streaming(),costume,samples:sampling.snapshot(),ready,started,mode,riding,dismount:dismount?{...dismount}:null,navigation:{...navigation,points:navigation.points.map(p=>({...p}))},flagExhibits:flags.exhibits.map(f=>({id:f.id,x:f.x,z:f.z,design:f.design})),avatarPosition:astronaut.root.position.toArray(),handErrors:astronaut.handErrors(),station:station.snapshot(),atlas:atlas.snapshot(),predictedContacts,renderedRemotes:[...remotes.values()].map(r=>({name:r.name,state:r.current,handErrors:r.astronaut.handErrors(),samples:r.motion.samples.length})),rover:{...roverState},network:expedition.snapshot(),remoteCount:remotes.size,nearbyRocks:terrain.rocks.filter(r=>Math.hypot(r.x-player.x,r.z-player.z)<20).map(r=>({...r})),player:{...player},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},orbitDistance:universe.state.distance,targetOrbitDistance:universe.state.targetDistance,moonRadius:MOON_RADIUS,earthDistance:EARTH_DISTANCE,footsteps:footstepCount,feet:astronaut.legs.map(l=>({position:l.world.toArray(),swing:l.swing,kneeQuaternion:l.lower.quaternion.toArray(),hipQuaternion:l.upper.quaternion.toArray()})),fps,ground:groundAt(player.x,player.z),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})});
   animate();

@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p _site
-          cp index.html styles.css atlas.css _site/
+          cp index.html styles.css atlas.css racing.css _site/
           cp -R src assets vendor _site/
           touch _site/.nojekyll
       - name: Upload static site
