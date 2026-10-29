@@ -164,4 +164,10 @@ The stadium has 24 inward-facing floodlight banks. Four nearby spotlights illumi
 
 Race buggies and the exploration rover now check actual rock footprints, with separate tyre paths and underbody clearance. Low stones between the tyres pass underneath; smaller tyre bumps lift the suspension; taller stones block the wheels or chassis. Swept contact prevents fast cars from skipping through narrow obstacles. Static rock collision uses height fields sampled from the photographed meshes during loading, rather than full model raycasts every frame. Arch supports also use model-derived contact. These remain a game approximation, not a full rigid-body tyre/deformable-soil simulation.
 
-Rock locations are deterministic across viewers and independent of streamed graphics. The host checks stones around each racer even when that driver is far away; client prediction uses the same geometry. All players must refresh after this update and create a new crew invite (protocol 12).
+Rock locations are deterministic across viewers and independent of streamed graphics. The host checks stones around each racer even when that driver is far away; client prediction uses the same geometry. All players must refresh after this update and create a new crew invite (protocol 13).
+
+### Visible race boundaries
+
+Continuous 3.8 m steel-and-mesh safety fences now mark both sides of the entire lunar course, with solid alternating pale/gold lower panels and amber edge strips. The terrain remains regolith. Paddock access openings connect the parked cars and habitat approach to the course. A wide START / FINISH gantry identifies the two-lap line.
+
+Rendering, host simulation, client prediction, walkers and the exploration rover share the same terrain-following fence segments. Swept contact stops fast cars crossing the barriers while preserving motion along them. The fence geometry uses instancing to keep draw calls low.

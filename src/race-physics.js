@@ -1,4 +1,5 @@
 import {createLandscape} from './landscape.js';
+import {resolveTrackFence} from './track-boundary.js';
 import {RACE_CONTACT,SIX_WHEEL_CONTACT,moveVehicleWithRocks,wheelSurface} from './vehicle-contact.js';
 import {STADIUM,clamp,gridPlace,CHECKPOINTS,ROCKFALLS,rockfallPose} from './stadium-layout.js';
 export const ARENA=STADIUM;
@@ -22,6 +23,7 @@ export function driveRacer(p,raw,dt,ground,parked=[],environment=null){
   const rocks=environment?.nearby(p.x,p.z,7)||[];
   p.rockImpact=moveVehicleWithRocks(p,oldX,oldZ,ground,rocks,environment?.surfaceAt,p.car===1?SIX_WHEEL_CONTACT:RACE_CONTACT);
   for(const q of parked)if(q.slot!==p.slot&&Math.abs(p.y-q.y)<3)separateStatic(p,q,4.1);
+  p.rockImpact=Math.max(p.rockImpact,resolveTrackFence(p,oldX,oldZ,ground));
   const r=Math.hypot(p.x-STADIUM.x,p.z-STADIUM.z);
   const oldR=Math.hypot(oldX-STADIUM.x,oldZ-STADIUM.z);
   if(oldR<=1066&&r>1066&&!(p.x<STADIUM.x&&Math.abs(p.z-STADIUM.z)<65)){const nx=(p.x-STADIUM.x)/r,nz=(p.z-STADIUM.z)/r;p.x=STADIUM.x+nx*1066;p.z=STADIUM.z+nz*1066;const v=p.vx*nx+p.vz*nz;if(v>0){p.vx-=v*1.15*nx;p.vz-=v*1.15*nz;}}

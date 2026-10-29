@@ -7,7 +7,7 @@ const browser=await chromium.launch({channel:process.env.SELENE_BROWSER_CHANNEL|
 try{
  const page=await browser.newPage({viewport:{width:1366,height:768}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await paddockSpawn(page);await boot(page);await page.screenshot({path:'artifacts/stadium-paddock.png'});
- const stadium=await page.evaluate(()=>seleneRace.snapshot().stadium);assert.ok(stadium.sameScene&&stadium.radius>=1000&&stadium.crowd>5000&&stadium.floodlightTowers===24&&stadium.slopeRocks===18);
+ const stadium=await page.evaluate(()=>seleneRace.snapshot().stadium);assert.ok(stadium.sameScene&&stadium.radius>=1000&&stadium.crowd>5000&&stadium.floodlightTowers===24&&stadium.slopeRocks===18&&stadium.fenceSegments>1950&&stadium.fenceHeight>=3.5);
  await toolbar(page);await page.locator('#race-button').click();await page.screenshot({path:'artifacts/stadium-lobby.png'});assert.equal(await page.locator('#race-enter').count(),0);
  await page.locator('#race-close').click();await page.keyboard.press('KeyE');await page.waitForFunction(()=>seleneRace.snapshot().active,null,{timeout:10000});
  await page.screenshot({path:'artifacts/stadium-driver.png'});

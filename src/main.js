@@ -21,6 +21,7 @@ import {MISSIONS,missionAt,SAMPLE_DEPOT} from './missions.js';
 import {createHUDLayout} from './hud-layout.js';
 import {createAudio} from './audio.js';
 import {createRacing} from './racing.js';
+import {resolveTrackFence} from './track-boundary.js';
 import {ARENA} from './race-physics.js';
 
 const $=id=>document.getElementById(id);
@@ -530,6 +531,7 @@ async function start(){
           if(fast&&player.speed>1.9&&player.grounded&&elapsed-lastBound>.85&&!input.jump){player.vy=.60;player.grounded=false;lastBound=elapsed;}
           const wasGrounded=player.grounded;
           stepPlayer(player,input,FIXED_STEP,groundAt,landscape.groundAt);resolveObstacles(player,terrain.colliders,.32,terrain.rockTopAt);localContacts();
+          resolveTrackFence(player,oldX,oldZ,landscape.groundAt,.32,0,1.9);
           enforceTerrainFloor(player,landscape.groundAt);
           if(wasGrounded&&!player.grounded&&player.vy>1)sound.effect('jump');
           if(player.landed)sound.effect('land',Math.min(1.5,player.landingSpeed/2));
