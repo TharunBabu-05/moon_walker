@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import {mergeGeometries} from '../vendor/utils/BufferGeometryUtils.js';
 import {CARS} from './race-physics.js';
-import {STADIUM,TAU,CHECKPOINTS,ROCKFALLS,rockfallPose,coursePoint,ARCHES} from './stadium-layout.js';
+import {buildRockHeightfield,sampleRockHeightfield} from './rock-heightfield.js';
+import {STADIUM,TAU,CHECKPOINTS,ROCKFALLS,rockfallPose,coursePoint,ARCHES,SLOPE_ROCKS,slopeRockHeight} from './stadium-layout.js';
 const metal=(color,roughness=.65)=>new THREE.MeshStandardMaterial({color,roughness,metalness:.32});
 const up=new THREE.Vector3(0,1,0);
 function mesh(root,geo,mat,x=0,y=0,z=0){const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;root.add(m);return m;}
@@ -98,7 +99,26 @@ export function createStadium(scene,ground,makeRock){
   for(const section of sectors){const people=crowdLocations.filter(p=>p.sector===section.i),group=new THREE.Group();root.add(group);for(const part of suit.children){const instances=new THREE.InstancedMesh(part.geometry,part.material,people.length);people.forEach((p,i)=>{dummy.position.set(p.x,p.y,p.z);dummy.rotation.set(0,p.yaw,0);dummy.scale.setScalar(1);dummy.updateMatrix();instances.setMatrixAt(i,dummy.matrix);});group.add(instances);}group.visible=false;detailed.push({...section,group});}
   // Monumental entrance, scoreboards, stairs and industrial floodlight towers.
   for(const side of [-1,1]){const x=STADIUM.gate.x,z=STADIUM.z+side*35,y=ground(x,z);box(root,8,50,9,concrete,x,y+25,z);for(let j=0;j<5;j++)box(root,8.2,.8,9.2,gold,x,y+8+j*8,z);const gantry=sign('SELENE / CRATER STADIUM',72,9);gantry.rotation.y=Math.PI/2;gantry.position.set(x,y+48,STADIUM.z);if(side===1)root.add(gantry);}
-  for(let i=0;i<12;i++){const a=i*TAU/12,r=1180,x=STADIUM.x+Math.cos(a)*r,z=STADIUM.z+Math.sin(a)*r,y=ground(x,z);box(root,3,95,3,steel,x,y+47,z);const bank=box(root,23,6,3,dark,x,y+94,z);bank.rotation.y=-a;for(let j=0;j<5;j++)box(bank,3.4,3,.15,light,-8+j*4,0,-1.6);}
+  const floodlightSites=[];
+  for(let i=0;i<24;i++){
+    const a=i*TAU/24,r=1042,x=STADIUM.x+Math.cos(a)*r,z=STADIUM.z+Math.sin(a)*r,y=ground(x,z),target=coursePoint(i/24-.5);
+    box(root,4,2,4,concrete,x,y+1,z);box(root,1.3,86,1.3,steel,x,y+43,z);
+    for(let j=0;j<6;j++){box(root,3,.18,.9,gold,x,y+6+j*12,z);}
+    const bank=new THREE.Group();bank.position.set(x,y+86,z);bank.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),new THREE.Vector3(target.x-x,ground(target.x,target.z)-y-86,target.z-z).normalize());root.add(bank);
+    box(bank,22,9,1.8,dark);for(let row=0;row<2;row++)for(let j=0;j<5;j++){
+      box(bank,3.6,3.2,.4,steel,-8+j*4,-2+row*4,-1);box(bank,3.1,2.7,.08,light,-8+j*4,-2+row*4,-1.23);
+    }
+    floodlightSites.push({x,y:y+86,z,target:{x:target.x,y:ground(target.x,target.z),z:target.z}});
+  }
+  // Four stable light slots avoid changing shader variants or rendering 24
+  // extra shadow maps. Physical inverse-square falloff lights terrain and suits.
+  const floodlights=Array.from({length:4},()=>{const l=new THREE.SpotLight(0xe4edff,210000,780,.95,.65,2);root.add(l,l.target);return l;});
+  let lightX=Infinity,lightZ=Infinity;
+  const updateLights=viewer=>{
+    if(Math.hypot(viewer.x-lightX,viewer.z-lightZ)<20)return;lightX=viewer.x;lightZ=viewer.z;
+    const nearest=floodlightSites.map((s,i)=>({i,d:Math.hypot(s.x-viewer.x,s.z-viewer.z)})).sort((a,b)=>a.d-b.d).slice(0,4);
+    for(let i=0;i<floodlights.length;i++){const l=floodlights[i],p=floodlightSites[nearest[i].i];l.position.set(p.x,p.y,p.z);l.target.position.set(p.target.x,p.target.y,p.target.z);l.intensity=210000;}
+  };
   const scoreboard=sign('CRATER RUN / CREW RACING',65,11);scoreboard.position.set(STADIUM.gate.x+35,ground(STADIUM.gate.x+35,28)+35,28);scoreboard.rotation.y=Math.PI/2;root.add(scoreboard);
   // Sparse survey poles mark a regolith route, never a road or neon ribbon.
   for(let i=0;i<16;i++){const p=CHECKPOINTS[i],a=Math.atan2(p.z-STADIUM.z,p.x-STADIUM.x);for(const side of [-1,1]){const x=p.x+Math.cos(a)*side*30,z=p.z+Math.sin(a)*side*30,y=ground(x,z);box(root,.18,5,.18,steel,x,y+2.5,z);const flag=mesh(root,new THREE.PlaneGeometry(1.5,1),cloth,x,y+4.5,z);flag.rotation.y=-a;}
@@ -108,9 +128,26 @@ export function createStadium(scene,ground,makeRock){
   const stakes=new THREE.InstancedMesh(new THREE.CylinderGeometry(.055,.08,1.7,5),cloth,512);let stakeCount=0;
   for(let i=0;i<256;i++){const p=coursePoint(i/256),a=Math.atan2(p.z-STADIUM.z,p.x-STADIUM.x);for(const s of [-1,1]){const x=p.x+Math.cos(a)*30*s,z=p.z+Math.sin(a)*30*s;dummy.position.set(x,ground(x,z)+.85,z);dummy.rotation.set(0,0,0);dummy.scale.setScalar(1);dummy.updateMatrix();stakes.setMatrixAt(stakeCount++,dummy.matrix);}}root.add(stakes);
   // Photographed rock meshes form cliffs and bridges around the course.
-  const rockGroups=[];for(const p of ARCHES){const a=Math.atan2(p.z-STADIUM.z,p.x-STADIUM.x),base=ground(p.x,p.z);const group=new THREE.Group();root.add(group);for(const s of [-1,1]){const x=p.x+Math.cos(a)*s*49,z=p.z+Math.sin(a)*s*49,r=makeRock(28,Math.abs(s));r.position.set(x,base+20,z);r.scale.set(1,1.8,1);r.rotation.y=-a;group.add(r);const foot=makeRock(24,2);foot.position.set(x,ground(x,z)+4,z);foot.scale.set(1.3,.8,1.2);group.add(foot);}const cap=makeRock(39,2);cap.scale.set(1.9,.45,.65);cap.rotation.y=-a;cap.position.set(p.x,base+43,p.z);group.add(cap);rockGroups.push({group,x:p.x,z:p.z});}
+  const rockGroups=[],rockColliders=[];
+  function solidRock(object){
+    object.updateWorldMatrix(true,true);const bounds=new THREE.Box3().setFromObject(object),center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3()),radius=Math.hypot(size.x,size.z)/2,geos=[];
+    object.traverse(m=>{if(m.isMesh)geos.push(m.geometry.clone().applyMatrix4(m.matrixWorld).translate(-center.x,-bounds.min.y,-center.z).scale(1/radius,1/radius,1/radius));});
+    const field=buildRockHeightfield(geos);geos.forEach(g=>g.dispose());rockColliders.push({x:center.x,z:center.z,yaw:0,bottom:bounds.min.y,top:bounds.max.y,radius,field});
+  }
+  for(const p of ARCHES){const a=Math.atan2(p.z-STADIUM.z,p.x-STADIUM.x),base=ground(p.x,p.z);const group=new THREE.Group();root.add(group);for(const s of [-1,1]){const x=p.x+Math.cos(a)*s*49,z=p.z+Math.sin(a)*s*49,r=makeRock(28,Math.abs(s));r.position.set(x,base+20,z);r.scale.set(1,1.8,1);r.rotation.y=-a;group.add(r);solidRock(r);const foot=makeRock(24,2);foot.position.set(x,ground(x,z)+4,z);foot.scale.set(1.3,.8,1.2);group.add(foot);solidRock(foot);}const cap=makeRock(39,2);cap.scale.set(1.9,.45,.65);cap.rotation.y=-a;cap.position.set(p.x,base+43,p.z);group.add(cap);solidRock(cap);rockGroups.push({group,x:p.x,z:p.z});}
+  // Exposed bedrock material over the same collision height, not floating props.
+  const bedrock=makeRock(.1,0).children[0].material.clone();bedrock.vertexColors=true;bedrock.color.setHex(0x999b9e);
+  for(const key of ['map','normalMap','roughnessMap','aoMap'])if(bedrock[key]){bedrock[key]=bedrock[key].clone();bedrock[key].wrapS=bedrock[key].wrapT=THREE.RepeatWrapping;bedrock[key].repeat.set(10,14);}
+  for(const p of SLOPE_ROCKS){
+    const geometry=new THREE.PlaneGeometry(p.width*2,p.length*2,48,72);geometry.rotateX(-Math.PI/2);const pos=geometry.attributes.position,colors=[],relief=[];
+    for(let i=0;i<pos.count;i++){const lx=pos.getX(i),lz=pos.getZ(i),c=Math.cos(p.yaw),s=Math.sin(p.yaw),x=p.x+c*lx+s*lz,z=p.z-s*lx+c*lz,h=ground(x,z),rise=slopeRockHeight(p,x,z);
+      pos.setXYZ(i,x,h+.045,z);relief.push(rise);const strata=.85+.06*Math.sin(h*.7+Math.sin(x*.15))+.035*Math.sin(x*2+z*3),edge=Math.min(1,rise/3),shade=1+(strata-1)*edge;colors.push(shade,shade,shade);
+    }
+    const indices=[];for(let i=0;i<geometry.index.count;i+=3){const a=geometry.index.getX(i),b=geometry.index.getX(i+1),c=geometry.index.getX(i+2);if(Math.max(relief[a],relief[b],relief[c])>.15)indices.push(a,b,c);}geometry.setIndex(indices);
+    geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.computeVertexNormals();const shelf=mesh(root,geometry,bedrock);shelf.name='Sloping lunar bedrock';
+  }
   batch(root);
   const falling=ROCKFALLS.map(s=>{const rock=makeRock(s.radius,s.id%3);root.add(rock);const warning=mesh(root,new THREE.RingGeometry(s.radius+1,s.radius+1.5,28),new THREE.MeshBasicMaterial({color:0xcda15c,side:THREE.DoubleSide,transparent:true,opacity:.8}));warning.rotation.x=-Math.PI/2;return {rock,warning,site:s};});
   // Transparent barriers along the spectator front are represented by solid terrain-side walls.
-  return {root,crowdCount:crowdLocations.length,update(viewer,state){for(const s of detailed)s.group.visible=Math.hypot(viewer.x-s.x,viewer.z-s.z)<75;for(const r of rockGroups)r.group.visible=Math.hypot(viewer.x-r.x,viewer.z-r.z)<1600;for(const f of falling){const p=rockfallPose(f.site,state?.raceTime||0,ground(f.site.x,f.site.z)),running=state?.phase==='racing';f.rock.visible=running&&p.active;f.rock.position.set(p.x,p.y,p.z);f.rock.rotation.set(p.y*.04,p.y*.03,0);f.warning.visible=running&&(p.warning||p.active);f.warning.position.set(p.x,ground(p.x,p.z)+.08,p.z);f.warning.material.opacity=.4+.4*Math.sin((state?.time||0)*8)**2;}},floor(x,z,base){const r=Math.hypot(x-STADIUM.x,z-STADIUM.z),a=Math.atan2(z-STADIUM.z,x-STADIUM.x);for(const s of sectors)if(s.i%4===0&&r>=1045&&r<=1142&&Math.abs(Math.atan2(Math.sin(a-s.aisle),Math.cos(a-s.aisle)))*r<1.9)return Math.max(base,s.y0+(s.y1-s.y0)*(r-1045)/97+.16);if(r<1067||r>1142||Math.abs(Math.atan2(Math.sin(a-Math.PI),Math.cos(a-Math.PI)))<.065)return base;const section=sectors.find(s=>Math.abs(Math.atan2(Math.sin(a-s.i/sections*TAU),Math.cos(a-s.i/sections*TAU)))<Math.PI/sections);if(!section)return base;return Math.max(base,section.base+Math.max(0,Math.floor((r-1067)/6))*3+1.5);},snapshot:()=>({sameScene:root.parent===scene,radius:STADIUM.radius,crowd:crowdLocations.length,stands:sectors.length})};
+  return {root,rocksNear:(x,z,r=7)=>rockColliders.filter(q=>Math.hypot(x-q.x,z-q.z)<r+q.radius),rockSurface:(r,x,z)=>sampleRockHeightfield(r.field,r,x,z),crowdCount:crowdLocations.length,update(viewer,state){updateLights(viewer);for(const s of detailed)s.group.visible=Math.hypot(viewer.x-s.x,viewer.z-s.z)<75;for(const r of rockGroups)r.group.visible=Math.hypot(viewer.x-r.x,viewer.z-r.z)<1600;for(const f of falling){const p=rockfallPose(f.site,state?.raceTime||0,ground(f.site.x,f.site.z)),running=state?.phase==='racing';f.rock.visible=running&&p.active;f.rock.position.set(p.x,p.y,p.z);f.rock.rotation.set(p.y*.04,p.y*.03,0);f.warning.visible=running&&(p.warning||p.active);f.warning.position.set(p.x,ground(p.x,p.z)+.08,p.z);f.warning.material.opacity=.4+.4*Math.sin((state?.time||0)*8)**2;}},floor(x,z,base){const r=Math.hypot(x-STADIUM.x,z-STADIUM.z),a=Math.atan2(z-STADIUM.z,x-STADIUM.x);for(const s of sectors)if(s.i%4===0&&r>=1045&&r<=1142&&Math.abs(Math.atan2(Math.sin(a-s.aisle),Math.cos(a-s.aisle)))*r<1.9)return Math.max(base,s.y0+(s.y1-s.y0)*(r-1045)/97+.16);if(r<1067||r>1142||Math.abs(Math.atan2(Math.sin(a-Math.PI),Math.cos(a-Math.PI)))<.065)return base;const section=sectors.find(s=>Math.abs(Math.atan2(Math.sin(a-s.i/sections*TAU),Math.cos(a-s.i/sections*TAU)))<Math.PI/sections);if(!section)return base;return Math.max(base,section.base+Math.max(0,Math.floor((r-1067)/6))*3+1.5);},snapshot:()=>({sameScene:root.parent===scene,radius:STADIUM.radius,crowd:crowdLocations.length,stands:sectors.length,floodlightTowers:floodlightSites.length,activeLights:floodlights.length,slopeRocks:SLOPE_ROCKS.length})};
 }

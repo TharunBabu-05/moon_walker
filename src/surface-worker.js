@@ -1,8 +1,7 @@
 import * as THREE from '../vendor/three.module.js';
 import {createLandscape,noise,hash,randomGenerator} from './landscape.js';
-import {FLAG_EXHIBITS} from './lunar-sites.js';
 import {planRoute} from './navigation.js';
-import {clearRaceLane} from './stadium-layout.js';
+import {rockCell,landmarkRocks} from './rock-layout.js';
 const landscape=createLandscape(),dummy=new THREE.Object3D();
 const terrainIndices=[];
 for(let level=0;level<10;level++){
@@ -26,17 +25,10 @@ function terrain({x,z}){
 }
 function rocks({x,z,heights}){
   const cx=Math.floor(x/64),cz=Math.floor(z/64),records=[];
-  function add(wx,wz,radius,yaw,variant){
-    if(radius>.32&&clearRaceLane(wx,wz))return;
-    if(FLAG_EXHIBITS.some(e=>Math.hypot(wx-e.x,wz-e.z)<3+radius)||Math.abs(wx+25)<19+radius&&Math.abs(wz-28)<20+radius||Math.hypot(wx,wz)<2.7||Math.hypot(wx-3,wz-2)<3.5||Math.hypot(wx+4,wz-5)<1)return;
-    const bottom=Math.min(landscape.groundAt(wx,wz),landscape.groundAt(wx+radius*.55,wz),landscape.groundAt(wx-radius*.55,wz),landscape.groundAt(wx,wz+radius*.55),landscape.groundAt(wx,wz-radius*.55))-radius*.15;
-    records.push({x:wx,z:wz,radius,yaw,variant,bottom,top:bottom+heights[variant]*radius});
-  }
   for(let ix=cx-7;ix<=cx+7;ix++)for(let iz=cz-7;iz<=cz+7;iz++){
-    const rng=randomGenerator((hash(ix+373,iz-99)*0xffffffff)>>>0);
-    for(let i=0;i<23;i++){const wx=(ix+rng())*64,wz=(iz+rng())*64,radius=.07+rng()**4*1.45;if(Math.hypot(wx-x,wz-z)>440)continue;add(wx,wz,radius,rng()*Math.PI*2,Math.floor(rng()*3));}
+    for(const r of rockCell(ix,iz,landscape.groundAt,heights))if(Math.hypot(r.x-x,r.z-z)<440)records.push(r);
   }
-  for(const r of [[-3,-5,1.12,.7,0],[6,-12,1.8,2,1],[-13,-22,2.4,1.1,2],[18,-38,3.1,2.5,0]])add(...r);
+  for(const r of landmarkRocks(landscape.groundAt,heights))if(Math.hypot(r.x-x,r.z-z)<440)records.push(r);
   const near=[new Float32Array(240*16),new Float32Array(240*16),new Float32Array(240*16)],far=new Float32Array(6000*16),farColors=new Float32Array(6000*3),counts=[0,0,0];let farCount=0;
   for(const r of records){dummy.position.set(r.x,r.bottom,r.z);dummy.rotation.set(0,r.yaw,0);dummy.scale.setScalar(r.radius);dummy.updateMatrix();
     if(r.radius>.28&&Math.hypot(r.x-x,r.z-z)<90&&counts[r.variant]<240){dummy.matrix.toArray(near[r.variant],counts[r.variant]++*16);}

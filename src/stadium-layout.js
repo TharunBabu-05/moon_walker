@@ -13,6 +13,21 @@ export function gridPlace(slot){const side=36+(slot%4-1.5)*7,back=Math.floor(slo
 export const ROCKFALLS=[.20,.36,.54,.76].map((t,i)=>({...coursePoint(t),id:i,radius:3.4+i*.35,period:19+i*3,warning:4,drop:30+i*5}));
 export const ARCHES=[.14,.35,.53,.72].map(coursePoint);
 export const ARCH_PILLARS=ARCHES.flatMap(p=>{const a=Math.atan2(p.z-STADIUM.z,p.x-STADIUM.x);return [-1,1].map(s=>({x:p.x+Math.cos(a)*s*49,z:p.z+Math.sin(a)*s*49,radius:17}));});
+// Long tilted bedrock shelves, with a drivable toe and fractured, steeper back.
+// Their height is part of the Moon itself, so tyres and walkers use the same surface.
+export const SLOPE_ROCKS=Array.from({length:18},(_,i)=>{
+  const t=.045+i*.052,p=coursePoint(t),q=coursePoint(t+.001),a=Math.atan2(p.z-STADIUM.z,p.x-STADIUM.x),side=i%2?-1:1,offset=78+(i%3)*13;
+  const yaw=Math.atan2(q.x-p.x,q.z-p.z);
+  return {x:p.x+Math.cos(a)*offset*side,z:p.z+Math.sin(a)*offset*side,yaw,c:Math.cos(yaw),s:Math.sin(yaw),width:36+(i%4)*5,length:65+(i%3)*12,height:18+(i%5)*4};
+});
+export function slopeRockHeight(p,x,z){
+  const dx=x-p.x,dz=z-p.z;if(Math.abs(dx)>145||Math.abs(dz)>145)return 0;
+  const c=p.c,s=p.s,u=(c*dx-s*dz)/p.width,v=(s*dx+c*dz)/p.length;
+  if(Math.abs(u)>=1||Math.abs(v)>=1)return 0;
+  const sides=(1-smooth(Math.abs(u),.58,1)),toe=smooth(v,-1,.58),back=1-smooth(v,.66,1);
+  const fracture=1+.025*Math.sin(u*17+v*7)+.012*Math.sin(v*31-u*11);
+  return p.height*sides*toe*back*fracture;
+}
 export function rockfallPose(site,time,ground){const cycle=((time+site.id*5)%site.period+site.period)%site.period,fall=cycle-site.warning,duration=Math.sqrt(2*site.drop/1.62);return {id:site.id,x:site.x,z:site.z,radius:site.radius,warning:cycle<site.warning,active:fall>=0&&fall<duration+1.5,y:ground+site.radius+Math.max(0,site.drop-.81*Math.max(0,fall)**2),impact:fall>=duration&&fall<duration+1.5,cycle:Math.floor((time+site.id*5)/site.period)};}
 export function stadiumSurface(x,z,original,anchor){
   const dx=x-STADIUM.x,dz=z-STADIUM.z,r=Math.hypot(dx,dz);if(r>1420)return original;
@@ -27,6 +42,7 @@ export function stadiumSurface(x,z,original,anchor){
   const corridor=(1-smooth(Math.abs(dz),28,65))*smooth(dx,-1380,-1250)*(1-smooth(dx,-800,-650));
   const accessHeight=anchor-5+clamp((-dx-800)/400,0,1)*45;
   h+=(accessHeight-h)*corridor;
+  for(const rock of SLOPE_ROCKS)h+=slopeRockHeight(rock,x,z);
   return original+(h-original)*(1-smooth(r,1250,1420));
 }
 export function clearRaceLane(x,z){const r=Math.hypot(x-STADIUM.x,z-STADIUM.z);return r<1200&&(Math.abs(courseInfo(x,z).offset)<23||Math.hypot(x-PADDOCK.x,z-PADDOCK.z)<65)||Math.abs(z-STADIUM.z)<20&&x>250&&x<PADDOCK.x;}

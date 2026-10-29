@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import {GLTFLoader} from '../vendor/loaders/GLTFLoader.js';
 import {hash,randomGenerator,noise} from './landscape.js';
 import {createWorkerClient} from './worker-client.js';
+import {createRockQuery} from './rock-layout.js';
+import {buildRockHeightfield,sampleRockHeightfield} from './rock-heightfield.js';
 
 const CELL=64;
 export async function createRockField(group,renderer,landscape,fallbackMaterial) {
@@ -35,6 +37,8 @@ export async function createRockField(group,renderer,landscape,fallbackMaterial)
   const dummy=new THREE.Object3D(),color=new THREE.Color(),colliders=[],records=[];
   const stream=createWorkerClient(),bins=new Map();let anchorX=Infinity,anchorZ=Infinity,pending=false,completed=0;
   const heights=templates.map(t=>t.height);
+  const nearby=createRockQuery(landscape.groundAt,heights),fields=templates.map(t=>buildRockHeightfield(t.parts.map(p=>p.geometry)));
+  const physicsSurfaceAt=(r,x,z)=>sampleRockHeightfield(fields[r.variant],r,x,z);
   function install(data){
     records.length=0;colliders.length=0;bins.clear();
     for(const r of data.records){records.push(r);if(r.radius<=.13)continue;colliders.push(r);
@@ -79,5 +83,5 @@ export async function createRockField(group,renderer,landscape,fallbackMaterial)
     for(const m of group.children){m.scale.setScalar(scale);m.position.copy(center).multiplyScalar(-scale);}
     return group;
   }
-  return {streaming:()=>({jobs:completed,pending}),update,groundAt,surfaceAt,colliders,records,templates,sampleMesh};
+  return {streaming:()=>({jobs:completed,pending}),update,groundAt,surfaceAt,physicsSurfaceAt,nearby,colliders,records,templates,sampleMesh};
 }

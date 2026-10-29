@@ -49,7 +49,9 @@ async function start(){
   const terrain=await buildTerrain(scene,renderer,landscape);
   const station=createStation(scene,terrain.groundAt,position=>{if(started&&mode!=='orbit')sound.event({type:'door',...position},player,mode==='first'?yaw:followYaw);}),groundAt=(x,z)=>race?race.floor(x,z,station.groundAt(x,z)):station.groundAt(x,z);
   const flags=createFlagExhibits(scene,groundAt);
-  const wheelGroundAt=(x,z)=>roverWheelHeight(x,z,landscape.groundAt,terrain.colliders,terrain.rockTopAt);
+  const vehicleRocks=(x,z,radius=7)=>race?race.rockEnvironment.nearby(x,z,radius):terrain.nearbyRocks(x,z,radius);
+  const vehicleSurface=(r,x,z)=>race?race.rockEnvironment.surfaceAt(r,x,z):terrain.vehicleSurfaceAt(r,x,z);
+  const wheelGroundAt=(x,z)=>roverWheelHeight(x,z,landscape.groundAt,vehicleRocks(x,z,3),vehicleSurface);
   const player=createPlayer(terrain.groundAt),roverState=createRoverState(landscape.groundAt),rover=createRover(scene,wheelGroundAt,roverState);
   let riding=false,dismount=null,costume=1,aimingActive=false;try{costume=localStorage.getItem('selene-costume')==='2'?2:1;}catch{}
   let navigation={destination:null,points:[],status:'idle',distance:0,index:0},lastPlan=0;
@@ -284,7 +286,7 @@ async function start(){
   $('copy-invite').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(expedition.invite());toast('Invite copied. Send it to your friends and keep this tab open.');}catch{$('invite-link').focus();$('invite-link').select();toast('Select and copy the invite link.');}});
   window.addEventListener('beforeunload',()=>expedition.leave());
   function controls(){
-    if(race?.active()&&mode!=='orbit'){$('control-strip').innerHTML='<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>R</kbd> Ready</span><span><kbd>E</kbd> Get out</span>';return;}
+    if(race?.active()&&mode!=='orbit'){$('control-strip').innerHTML='<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>Y</kbd> Ready</span><span><kbd>E</kbd> Get out</span>';return;}
     $('control-strip').innerHTML=mode==='orbit'?'<span><kbd>DRAG</kbd> Orbit</span><span><kbd>SCROLL</kbd> Zoom</span><span><kbd>1 / 2</kbd> Surface</span>':riding?'<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>E</kbd> Exit</span>':'<span><kbd>W A S D</kbd> Walk</span><span><kbd>SHIFT</kbd> Lope</span><span><kbd>F</kbd> Stone</span><span><kbd>G</kbd> Soil</span><span><kbd>B</kbd> Bag</span><span><kbd>HOLD T</kbd> Aim / throw</span><span><kbd>C</kbd> Costume</span><span><kbd>V</kbd> View</span>';
     $('touch-jump').textContent=riding?'BRAKE':'JUMP';
   }
@@ -518,7 +520,7 @@ async function start(){
       while(accumulator>=FIXED_STEP){
         if(riding){
           const oldYaw=roverState.yaw,oldX=player.x,oldZ=player.z,oldSpeed=roverState.speed;
-          stepRover(roverState,{throttle:inputZ,steer:-inputX,brake:keys.has('Space'),fast},FIXED_STEP,landscape.groundAt,terrain.colliders,terrain.rockTopAt);
+          stepRover(roverState,{throttle:inputZ,steer:-inputX,brake:keys.has('Space'),fast},FIXED_STEP,landscape.groundAt,vehicleRocks(roverState.x,roverState.z,7),vehicleSurface);
           if(oldSpeed-roverState.speed>1)sound.effect('collision',Math.min(1.5,(oldSpeed-roverState.speed)/3));
           const turn=angleDelta(oldYaw,roverState.yaw);yaw+=turn;followYaw+=turn;
           syncDriver();localContacts();
@@ -594,9 +596,9 @@ async function start(){
     uiTime+=dt;if(started&&uiTime>.15){updateHUD();uiTime=0;}
   }
   // Read-only diagnostic snapshot used by the local integration checks.
-  race=createRacing({scene,groundAt:landscape.groundAt,makeRock:terrain.sampleMesh,network:expedition,sound,toast,getPlayer:()=>player,
+  race=createRacing({scene,groundAt:landscape.groundAt,makeRock:terrain.sampleMesh,rockEnvironment:{nearby:terrain.nearbyRocks,surfaceAt:terrain.vehicleSurfaceAt},network:expedition,sound,toast,getPlayer:()=>player,
     canBoard:()=>{if(!started||riding||dismount||sampling.busy()||sampling.held()){toast('Get out of your buggy and stow your sample before boarding.');return false;}return true;},
-    onEnter:p=>{cancelAim();keys.clear();accumulator=0;lastRaceYaw=p.yaw;followYaw=yaw=p.yaw;setMode('follow');controls();targetFollowDistance=9.5;followPitch=.27;toast('W/S drive · A/D steer · Space brake · R ready · E get out. Open STADIUM for friends and race start.');},
+    onEnter:p=>{cancelAim();keys.clear();accumulator=0;lastRaceYaw=p.yaw;followYaw=yaw=p.yaw;setMode('follow');controls();targetFollowDistance=9.5;followPitch=.27;toast('W/S drive · A/D steer · Space brake · Y ready · E get out. Open STADIUM for friends and race start.');},
     onExit:p=>{keys.clear();accumulator=0;lastRaceYaw=null;if(p){const x=p.x+Math.cos(p.yaw)*3.2,z=p.z-Math.sin(p.yaw)*3.2;Object.assign(player,{x,z,y:groundAt(x,z),vx:0,vz:0,vy:0,speed:0,grounded:true});terrain.update(x,z);}targetFollowDistance=4.6;controls();toast('Back on foot beside the vehicle.');},
     openCrew:()=>{$('crew-button').click();},onRoute:setWaypoint});
   window.seleneRace=Object.freeze({snapshot:race.snapshot});

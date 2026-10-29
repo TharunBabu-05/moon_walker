@@ -104,5 +104,5 @@ export async function buildTerrain(scene,renderer,landscape){
     }
     dg.attributes.position.needsUpdate=true;dg.attributes.color.needsUpdate=true;
   }
-  return {streaming:()=>({terrainJobs:completed,terrainPending:pending,rocks:rockField.streaming()}),group,sampleMesh:rockField.sampleMesh,impactDust:p=>footstep(p,0,.8,false,true),groundAt:rockField.groundAt,rockTopAt:rockField.surfaceAt,colliders:rockField.colliders,rocks:rockField.records,update(x,z){update(x,z);rockField.update(x,z);},footstep,wheelTrack:(p,yaw)=>footstep(p,yaw,.5,true),updateDust};
+  return {streaming:()=>({terrainJobs:completed,terrainPending:pending,rocks:rockField.streaming()}),group,sampleMesh:rockField.sampleMesh,impactDust:p=>footstep(p,0,.8,false,true),groundAt:rockField.groundAt,rockTopAt:rockField.surfaceAt,vehicleSurfaceAt:rockField.physicsSurfaceAt,nearbyRocks:rockField.nearby,colliders:rockField.colliders,rocks:rockField.records,update(x,z){update(x,z);rockField.update(x,z);},footstep,wheelTrack:(p,yaw)=>footstep(p,yaw,.5,true),updateDust};
 }

@@ -2,7 +2,7 @@ import {reconcileContacts} from './contacts.js';
 export const MAX_CREW=8;
 // Changing the wire contract requires a fresh room so an older client cannot
 // silently omit pose fields that affect shared animation.
-const PROTOCOL=11;
+const PROTOCOL=12;
 const PREFIX=`selene-expedition-${PROTOCOL}-`;
 const numeric=['x','y','z','vx','vy','vz','yaw','speed','distance'];
 

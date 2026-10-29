@@ -1,4 +1,5 @@
 import {clamp, damp, GRAVITY, SURFACE_LIMIT} from './physics.js';
+import {ROVER_CONTACT,moveVehicleWithRocks} from './vehicle-contact.js';
 
 export function resolveObstacles(body, obstacles, radius=.32, surfaceAt=null,blocks=null) {
   let collided=false;
@@ -82,10 +83,10 @@ export function stepRover(p,input,dt,groundAt,obstacles=[],surfaceAt=null) {
     p.vx=fx*speed+rx*sideways-gx*GRAVITY*dt;
     p.vz=fz*speed+rz*sideways-gz*GRAVITY*dt;
   }
-  const oldY=p.y;
+  const oldY=p.y,oldX=p.x,oldZ=p.z;
   p.x=clamp(p.x+p.vx*dt,-SURFACE_LIMIT+3,SURFACE_LIMIT-3);
   p.z=clamp(p.z+p.vz*dt,-SURFACE_LIMIT+3,SURFACE_LIMIT-3);
-  if(resolveObstacles(p,obstacles,1.08,null,rock=>roverRockBlocks(p,rock,groundAt))){p.vx*=.92;p.vz*=.92;}
+  moveVehicleWithRocks(p,oldX,oldZ,groundAt,obstacles,surfaceAt,ROVER_CONTACT);
   const fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),rx=Math.cos(p.yaw),rz=-Math.sin(p.yaw);
   const corners=[];
   for(const side of [-1,1])for(const end of [-1,1])corners.push(roverWheelHeight(p.x+rx*1.01*side+fx*1.05*end,p.z+rz*1.01*side+fz*1.05*end,groundAt,obstacles,surfaceAt));

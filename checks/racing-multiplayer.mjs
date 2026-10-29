@@ -1,7 +1,7 @@
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import {paddockSpawn,toolbar,boot} from './stadium-fixture.mjs';
-const browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-webgl','--ignore-gpu-blocklist','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']});
+const browser=await chromium.launch({channel:process.env.SELENE_BROWSER_CHANNEL||'chrome',headless:true,args:['--enable-webgl','--ignore-gpu-blocklist','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']});
 const context=await browser.newContext({viewport:{width:1100,height:740}}),errors=[];
 if(process.env.SELENE_LOCAL_SIGNAL==='1')await context.addInitScript({path:'checks/local-peer-fixture.js'});
 try{
@@ -17,7 +17,7 @@ try{
  }
  await host.keyboard.press('KeyE');await host.waitForFunction(()=>seleneRace.snapshot().active);await guest.keyboard.press('KeyE');await guest.waitForFunction(()=>seleneRace.snapshot().active,null,{timeout:10000});
  await host.waitForFunction(()=>seleneRace.snapshot().world.racers.length===2);await guest.waitForFunction(()=>seleneRace.snapshot().world.racers.length===2);
- await host.keyboard.press('KeyR');await guest.keyboard.press('KeyR');await toolbar(host);await host.locator('#race-button').click();await host.waitForFunction(()=>!document.getElementById('race-start').disabled);await host.locator('#race-start').click();await host.locator('#race-close').click();
+ await host.keyboard.press('KeyY');await guest.keyboard.press('KeyY');await toolbar(host);await host.locator('#race-button').click();await host.waitForFunction(()=>!document.getElementById('race-start').disabled);await host.locator('#race-start').click();await host.locator('#race-close').click();
  await guest.waitForFunction(()=>seleneRace.snapshot().world.phase==='countdown');await host.waitForFunction(()=>seleneRace.snapshot().world.phase==='racing');await guest.waitForFunction(()=>seleneRace.snapshot().world.phase==='racing');
  await guest.keyboard.down('KeyW');await guest.waitForFunction(()=>seleneRace.snapshot().car.travel>35,null,{timeout:20000});await guest.keyboard.up('KeyW');await guest.keyboard.down('Space');
  await host.waitForFunction(()=>seleneRace.snapshot().world.racers.find(p=>p.name==='Race guest')?.travel>30);await guest.waitForFunction(()=>seleneRace.snapshot().car.speed<.4);await guest.keyboard.up('Space');

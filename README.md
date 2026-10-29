@@ -122,7 +122,7 @@ The stadium is a permanent structure on the exploration Moon, with a **1.2 km ra
 
 1. Open **STADIUM** in the top-right tools. Choose **Host / join CREW**; one friend hosts and copies the invite link, and the others join that expedition.
 2. Choose **Route to parked vehicles**. Walk or use the exploration buggy to reach the stadium paddock. Get out of the exploration buggy, stow any held sample, and approach one of the eight parked racers.
-3. Press **E** within 6 m to board. Each driver presses **R** or **Ready**. The lobby shows everyone in the crew, their vehicle and readiness.
+3. Press **E** within 6 m to board. Each driver presses **Y** or **Ready** (R remains retrieve stone on foot). The lobby shows everyone in the crew, their vehicle and readiness.
 4. The host clicks **Host: start race**. All drivers share a five-second countdown and two laps through 16 ordered checkpoints. **Solo practice** is available when playing alone.
 5. **W/S** drives/reverses, **A/D** steers, **Space** brakes, and **E** gets out after stopping. **1/2/3** retains the existing camera modes. You step out beside the vehicle where it stopped.
 
@@ -157,3 +157,11 @@ Browser checks require Google Chrome and save screenshots in `artifacts/`. The e
 ## Deployment history
 
 The failure notification at 09:01 IST on 26 October 2026 was the first attempt of run `40264479504`. Its `configure-pages` step returned `404 Not Found` before Pages was enabled. Attempt 2 succeeded at 09:03 IST, and subsequent deployments succeeded. Check the latest [Pages workflow runs](https://github.com/TharunBabu-05/moon_walker/actions/workflows/pages.yml) rather than an old email when determining current hosting status.
+
+### Stadium lights and rock contact
+
+The stadium has 24 inward-facing floodlight banks. Four nearby spotlights illuminate the ground, cars and suits at a time, keeping the shader light count fixed. Eighteen large, tilted bedrock shelves surround the regolith course; their height is shared by rendering and ground contact.
+
+Race buggies and the exploration rover now check actual rock footprints, with separate tyre paths and underbody clearance. Low stones between the tyres pass underneath; smaller tyre bumps lift the suspension; taller stones block the wheels or chassis. Swept contact prevents fast cars from skipping through narrow obstacles. Static rock collision uses height fields sampled from the photographed meshes during loading, rather than full model raycasts every frame. Arch supports also use model-derived contact. These remain a game approximation, not a full rigid-body tyre/deformable-soil simulation.
+
+Rock locations are deterministic across viewers and independent of streamed graphics. The host checks stones around each racer even when that driver is far away; client prediction uses the same geometry. All players must refresh after this update and create a new crew invite (protocol 12).
