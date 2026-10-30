@@ -526,7 +526,7 @@ async function start(){
   // Reflect the actual terrain and sun in the helmet's gold visor.
   updateCamera(.016);
   const cubeTarget=new THREE.WebGLCubeRenderTarget(128,{generateMipmaps:true,minFilter:THREE.LinearMipmapLinearFilter});const cube=new THREE.CubeCamera(.05,30000,cubeTarget);cube.position.set(player.x,player.y+1.8,player.z);cube.update(renderer,scene);astronaut.materials.glass.envMap=cubeTarget.texture;astronaut.materials.glass.envMapIntensity=.8;astronaut.materials.glassTwo.envMap=cubeTarget.texture;astronaut.materials.glassTwo.envMapIntensity=1.2;astronaut.materials.gold.envMap=cubeTarget.texture;
-  let lastBound=-10,lastVehicleImpact=-10;
+  let lastBound=-10;
   function animate(){
     requestAnimationFrame(animate);
     const dt=Math.min(clock.getDelta(),.08);expedition.update(performance.now()/1000);if(document.hidden)return;syncFleetView(dt);
@@ -550,7 +550,6 @@ async function start(){
           const oldYaw=roverState.yaw,oldX=player.x,oldZ=player.z,oldSpeed=roverState.speed;
           stepRover(roverState,{throttle:inputZ,steer:-inputX,brake:keys.has('Space'),fast},FIXED_STEP,landscape.groundAt,vehicleRocks(roverState.x,roverState.z,7),vehicleSurface);
           if(oldSpeed-roverState.speed>1)sound.effect('collision',Math.min(1.5,(oldSpeed-roverState.speed)/3));
-          if(roverState.rockImpact>.9&&elapsed-lastVehicleImpact>.4){lastVehicleImpact=elapsed;const x=roverState.x-Math.sin(roverState.yaw)*1.3,z=roverState.z-Math.cos(roverState.yaw)*1.3;terrain.impactDust(new THREE.Vector3(x,landscape.groundAt(x,z),z));}
           const turn=angleDelta(oldYaw,roverState.yaw);yaw+=turn;followYaw+=turn;
           syncDriver();localContacts();
           player.distance+=Math.hypot(player.x-oldX,player.z-oldZ);

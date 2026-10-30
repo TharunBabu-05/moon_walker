@@ -11,7 +11,9 @@ const dips=[.09,.28,.43,.66,.87].map(coursePoint);
 const tangent=coursePoint(.001),gridYaw=Math.atan2(-(tangent.x-PADDOCK.x),-(tangent.z-PADDOCK.z));
 export function gridPlace(slot){return {x:PARKING.x-Math.floor(slot/4)*14,z:PARKING.z+(slot%4-1.5)*12,yaw:gridYaw};}
 export const PARKING={x:PADDOCK.x-100,z:PADDOCK.z};
-export const ACCESS_LIGHTS=Array.from({length:12},(_,i)=>{const t=i/11;return {x:STADIUM.gate.x+(PARKING.x-STADIUM.gate.x)*t,z:STADIUM.gate.z+(PARKING.z-STADIUM.gate.z)*t+(i%2?14:-14)};});
+// Paired lamps begin on the approach, before the entrance shadow, and continue
+// all the way into the garage. Aim across the path, not down at the pole base.
+export const ACCESS_LIGHTS=Array.from({length:25},(_,i)=>[-1,1].map(side=>({x:i*24,z:STADIUM.gate.z+side*11,targetZ:STADIUM.gate.z}))).flat();
 export const ROCKFALLS=[.20,.36,.54,.76].map((t,i)=>({...coursePoint(t),id:i,radius:3.4+i*.35,period:19+i*3,warning:4,drop:30+i*5}));
 export const ARCHES=[.14,.35,.53,.72].map(coursePoint);
 export const ARCH_PILLARS=ARCHES.flatMap(p=>{const a=Math.atan2(p.z-STADIUM.z,p.x-STADIUM.x);return [-1,1].map(s=>({x:p.x+Math.cos(a)*s*49,z:p.z+Math.sin(a)*s*49,radius:17}));});

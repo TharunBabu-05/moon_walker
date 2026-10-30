@@ -59,7 +59,7 @@ Approach any stopped exploration buggy and press **E** to board. The first entra
 | ![Player driving a lunar buggy across the highlands](docs/media/buggy-expedition.webp) | ![Development view of the buggy with connected suspension arms and wheel assemblies](docs/media/suspension.webp) |
 | Each crew member spawns with a shared two-seat exploration buggy. | Wishbones, steering knuckles, coil springs and telescoping dampers connect the wheels to the chassis. |
 
-Tyres respond to small bumps while low stones between the wheel tracks can pass beneath the chassis. Taller rocks block the vehicle with a small rebound, chassis response and impact dust. Tilted and steered tyres follow slope contact, and the buggy carries uphill momentum into lunar flight when cresting a ridge. These are tuned game physics, not a full engineering vehicle simulation.
+Tyres respond to small bumps while low stones between the wheel tracks can pass beneath the chassis. Exploration buggy driving, rock contact and mechanical suspension use the original behavior from commit `85a23c2`: taller rocks stop the chassis, suspension follows wheel height, and gradual crests do not launch the buggy. Shared driver/passenger seats remain available. These are tuned game physics, not a full engineering vehicle simulation.
 
 <details>
 <summary><strong>Another view from the expedition</strong></summary>

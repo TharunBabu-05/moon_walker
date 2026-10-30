@@ -29,7 +29,8 @@
     "test:crew-rovers": "node --test checks/crew-rovers.test.mjs",
     "test:crew-rovers-browser": "node checks/crew-rovers-browser.mjs",
     "test:stadium-updates": "node checks/stadium-updates-browser.mjs",
-    "test:stadium-score-multiplayer": "node checks/stadium-score-multiplayer.mjs"
+    "test:stadium-score-multiplayer": "node checks/stadium-score-multiplayer.mjs",
+    "test:entrance-lighting": "node checks/entrance-lighting-browser.mjs"
   },
   "dependencies": {
     "three": "0.160.0"

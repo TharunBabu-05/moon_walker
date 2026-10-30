@@ -62,7 +62,6 @@ export function createRover(scene,groundAt,state){
   for(let i=0;i<=112;i++){const t=i/112,a=t*Math.PI*14;springPoints.push(new THREE.Vector3(Math.cos(a)*.065,t,Math.sin(a)*.065));}
   const coilGeometry=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(springPoints),112,.012,6,false);
   const up=new THREE.Vector3(0,1,0),delta=new THREE.Vector3(),top=new THREE.Vector3(),bottom=new THREE.Vector3(),probe=new THREE.Vector3(),inverseChassis=new THREE.Matrix4();
-  const normal=new THREE.Vector3(),axle=new THREE.Vector3(),support=new THREE.Vector3();
   function link(node,a,b){delta.subVectors(b,a);node.position.copy(a).addScaledVector(delta,.5);node.quaternion.setFromUnitVectors(up,delta.clone().normalize());node.scale.y=delta.length();}
   for(const side of [-1,1])for(const z of [-1.02,1.03]){
     const carrier=new THREE.Group();chassis.add(carrier);
@@ -122,49 +121,34 @@ export function createRover(scene,groundAt,state){
   batch(chassis);for(const wheel of wheels){batch(wheel.spin);batch(wheel.carrier);wheel.arms.forEach(batch);}coilGeometry.dispose();
   function update(p,dt){
     root.position.set(p.x,p.y,p.z);root.rotation.set(0,p.yaw,0);
-    chassis.rotation.x=damp(chassis.rotation.x,(p.pitch||0)+(p.impact||0)*.075,8,dt);chassis.rotation.z=damp(chassis.rotation.z,p.roll||0,8,dt);
+    chassis.rotation.x=damp(chassis.rotation.x,p.pitch||0,8,dt);chassis.rotation.z=damp(chassis.rotation.z,p.roll||0,8,dt);
     steeringWheel.rotation.z=-(p.steering||0)*1.5;
     root.updateMatrixWorld(true);inverseChassis.copy(chassis.matrixWorld).invert();
     for(const wheel of wheels){
-      const steering=wheel.z<0?(p.steering||0):-(p.steering||0)*.2;wheel.pivot.rotation.y=steering;
-      let target=minHubY;
-      if(p.grounded!==false){
-        probe.set(wheel.side*(.56+Math.sqrt(armLength**2-(wheel.hubY-armY)**2)),wheel.hubY,wheel.z).applyMatrix4(chassis.matrixWorld);
-        const h=.14,gx=(groundAt(probe.x+h,probe.z)-groundAt(probe.x-h,probe.z))/(2*h),gz=(groundAt(probe.x,probe.z+h)-groundAt(probe.x,probe.z-h))/(2*h);
-        normal.set(-gx,1,-gz).normalize();axle.set(Math.cos(steering),0,-Math.sin(steering)).transformDirection(chassis.matrixWorld);
-        const dot=normal.dot(axle),radial=Math.sqrt(Math.max(1e-8,1-dot*dot));
-        // Support of the tilted tyre cylinder, including its tread and width.
-        // A fixed world-Y radius cannot keep a steered, cambered wheel on slopes.
-        support.copy(normal).addScaledVector(axle,-dot).multiplyScalar(-.407/radial).addScaledVector(axle,-.13*Math.sign(dot));
-        target=wheel.hubY;
-        for(let i=0;i<3;i++){
-          const lateral=.56+Math.sqrt(Math.max(0,armLength**2-(target-armY)**2));
-          probe.set(wheel.side*lateral,target,wheel.z).applyMatrix4(chassis.matrixWorld).add(support);
-          target=THREE.MathUtils.clamp(target+(groundAt(probe.x,probe.z)-probe.y)/Math.max(.35,chassis.matrixWorld.elements[5]),minHubY,maxHubY);
-        }
-      }
+      probe.set(wheel.side*(.56+Math.sqrt(armLength**2-(wheel.hubY-armY)**2)),wheel.hubY,wheel.z).applyMatrix4(chassis.matrixWorld);
+      probe.y=groundAt(probe.x,probe.z)+.39;probe.applyMatrix4(inverseChassis);
+      const target=p.grounded===false?minHubY:THREE.MathUtils.clamp(probe.y,minHubY,maxHubY);
       // Bounded spring/damper integration; tyre contact prevents penetration,
       // while rebound and airborne droop remain damped instead of snapping.
       let remaining=Math.min(Math.max(dt,0),.08);
       while(remaining>0){const h=Math.min(remaining,1/120);wheel.velocity+=((target-wheel.hubY)*160-wheel.velocity*24)*h;wheel.hubY+=wheel.velocity*h;remaining-=h;}
-      if(p.grounded!==false&&Math.abs(wheel.hubY-target)<.008){wheel.hubY=target;wheel.velocity=0;}
       if(p.grounded!==false&&wheel.hubY<target){wheel.hubY=target;wheel.velocity=Math.max(0,wheel.velocity);}
       if(wheel.hubY<minHubY||wheel.hubY>maxHubY){wheel.hubY=THREE.MathUtils.clamp(wheel.hubY,minHubY,maxHubY);wheel.velocity=0;}
       const angle=Math.asin((wheel.hubY-armY)/armLength),out=armLength*Math.cos(angle);
       for(const arm of wheel.arms)arm.rotation.z=wheel.side*angle;
       wheel.carrier.position.set(wheel.side*(.56+out),wheel.hubY,wheel.z);
-      if(p.grounded!==false){probe.copy(wheel.carrier.position).applyMatrix4(chassis.matrixWorld).add(support);wheel.contactGap=probe.y-groundAt(probe.x,probe.z);}else wheel.contactGap=null;
       top.set(wheel.side*.62,.92,wheel.z);bottom.set(wheel.side*(.56+out*.78),armY+(wheel.hubY-armY)*.78,wheel.z);
       const length=top.distanceTo(bottom);delta.subVectors(bottom,top).normalize();
       probe.copy(top).addScaledVector(delta,.22);link(wheel.housing,top,probe);
       probe.copy(top).lerp(bottom,.16/length);link(wheel.piston,probe,bottom);
       wheel.coil.position.copy(top);wheel.coil.quaternion.setFromUnitVectors(up,delta.subVectors(bottom,top).normalize());wheel.coil.scale.y=length;
       wheel.eyes[0].position.copy(top);wheel.eyes[1].position.copy(bottom);
+      wheel.pivot.rotation.y=wheel.z<0?(p.steering||0):-(p.steering||0)*.2;
       wheel.spin.rotation.x=-(p.wheelTravel||0)/.39;
     }
   }
   update(state,.016);
   function driverPose(seat='driver'){root.updateMatrixWorld(true);return {matrix:(seat==='passenger'?passengerAnchor:driverAnchor).matrixWorld.clone(),grips:(seat==='passenger'?passengerGrips:grips).map(g=>g.getWorldPosition(new THREE.Vector3()))};}
-  function suspensionSnapshot(){root.updateMatrixWorld(true);return wheels.map(w=>({hubY:w.hubY,velocity:w.velocity,contactGap:w.contactGap,hub:w.carrier.getWorldPosition(new THREE.Vector3()).toArray(),armLengths:w.arms.map(a=>a.localToWorld(new THREE.Vector3(w.side*armLength,0,0)).distanceTo(a.getWorldPosition(new THREE.Vector3()))),jointErrors:w.arms.map((a,i)=>a.localToWorld(new THREE.Vector3(w.side*armLength,0,0)).distanceTo(w.carrier.localToWorld(new THREE.Vector3(0,i*.20,0)))),springLength:w.coil.scale.y}));}
+  function suspensionSnapshot(){root.updateMatrixWorld(true);return wheels.map(w=>({hubY:w.hubY,velocity:w.velocity,hub:w.carrier.getWorldPosition(new THREE.Vector3()).toArray(),armLengths:w.arms.map(a=>a.localToWorld(new THREE.Vector3(w.side*armLength,0,0)).distanceTo(a.getWorldPosition(new THREE.Vector3()))),jointErrors:w.arms.map((a,i)=>a.localToWorld(new THREE.Vector3(w.side*armLength,0,0)).distanceTo(w.carrier.localToWorld(new THREE.Vector3(0,i*.20,0)))),springLength:w.coil.scale.y}));}
   return {root,update,driverPose,suspensionSnapshot};
 }
