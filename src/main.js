@@ -54,6 +54,7 @@ async function start(){
   const vehicleSurface=(r,x,z)=>race?race.rockEnvironment.surfaceAt(r,x,z):terrain.vehicleSurfaceAt(r,x,z);
   const wheelGroundAt=(x,z)=>roverWheelHeight(x,z,landscape.groundAt,vehicleRocks(x,z,3),vehicleSurface);
   const player=createPlayer(terrain.groundAt),roverState=createRoverState(landscape.groundAt),rover=createRover(scene,wheelGroundAt,roverState);
+  let vehicleId=null,seat=null,pendingExit=null,seatPending=0,releasingSeat=false;const fleetModels=new Map(),fleetBuffers=new Map();let fleetVersion=-1,fleetIdentity=null;
   let riding=false,dismount=null,costume=1,aimingActive=false;try{costume=localStorage.getItem('selene-costume')==='2'?2:1;}catch{}
   let navigation={destination:null,points:[],status:'idle',distance:0,index:0},lastPlan=0;
   let footstepCount=0;
@@ -99,7 +100,7 @@ async function start(){
     ctx.save();ctx.translate(180,120);ctx.rotate(-(mode==='first'?yaw:followYaw));ctx.fillStyle='#bcded7';ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(5,6);ctx.lineTo(-5,6);ctx.closePath();ctx.fill();ctx.restore();
     ctx.strokeStyle='rgba(188,222,215,.35)';ctx.beginPath();ctx.arc(180,120,15,0,Math.PI*2);ctx.stroke();
     const dot=(x,z,color,size)=>{const px=180+(x-player.x)*360/mapSpan,pz=120+(z-player.z)*360/mapSpan;if(px<5||px>355||pz<5||pz>235)return;ctx.fillStyle=color;ctx.fillRect(px-size/2,pz-size/2,size,size);};
-    dot(roverState.x,roverState.z,'#d7b678',7);for(const remote of remotes.values())dot(remote.current.x,remote.current.z,'#b8e4d5',5);
+    for(const v of expedition.rovers().vehicles)dot(v.state.x,v.state.z,'#d7b678',v.id===expedition.identity()?7:5);for(const remote of remotes.values())dot(remote.current.x,remote.current.z,'#b8e4d5',5);
     const mission=sampling?.person(expedition.identity())?.mission,assignment=missionAt(mission);
     if(mission&&assignment&&['collect','return'].includes(mission.stage)){
       const point=mission.stage==='return'?SAMPLE_DEPOT:assignment;
@@ -114,10 +115,10 @@ async function start(){
   const remotes=new Map();let rosterSignature='',sampling,pendingSampleUntil=0;
   const localState=()=>{
     const active=started&&mode!=='orbit'&&!modalOpen()&&!document.hidden;
-    return {...player,arena:!!race?.active(),costume,aiming:aimingActive,riding,dismount:dismount?{...dismount}:undefined,vx:active?player.vx:0,vz:active?player.vz:0,vy:active?player.vy:0,speed:active?player.speed:0,rover:{...roverState,vx:active&&riding?roverState.vx:0,vz:active&&riding?roverState.vz:0,vy:active&&riding?roverState.vy:0,speed:active&&riding?roverState.speed:0}};
+    return {...player,vehicleId:vehicleId||expedition.identity(),seat,sharedRover:true,arena:!!race?.active(),costume,aiming:aimingActive,riding,dismount:dismount?{...dismount}:undefined,vx:active?player.vx:0,vz:active?player.vz:0,vy:active?player.vy:0,speed:active?player.speed:0,rover:{...roverState,vx:active&&riding?roverState.vx:0,vz:active&&riding?roverState.vz:0,vy:active&&riding?roverState.vy:0,speed:active&&riding?roverState.speed:0}};
   };
   const expedition=createExpedition({
-    getState:localState,
+    getState:localState,roverGround:landscape.groundAt,
     onChange(state){
       $('network-status').textContent=state.message;$('network-status').dataset.phase=state.phase;
       $('crew-count').textContent=state.count;$('crew-setup').hidden=state.phase==='connected';
@@ -138,7 +139,7 @@ async function start(){
     onRoster(members){
       const ids=new Set(members.map(m=>m.id));
       for(const [id,remote] of remotes)if(!ids.has(id)){
-        remote.sampleRig.dispose();remote.astronaut.dispose();disposeObject(remote.rover.root);remote.label.material.map.dispose();remote.label.material.dispose();remote.label.removeFromParent();remotes.delete(id);
+        remote.sampleRig.dispose();remote.astronaut.dispose();remote.label.material.map.dispose();remote.label.material.dispose();remote.label.removeFromParent();remotes.delete(id);
       }
       for(const member of members){
         if(!member.state)continue;
@@ -147,8 +148,7 @@ async function start(){
           const avatar=createAstronaut(scene,groundAt,(position,_yaw,strength)=>{if(started&&mode!=='orbit')sound.event({type:'step',...position,strength:strength*.65},player,mode==='first'?yaw:followYaw);});avatar.setCostume(member.state.costume||1);avatar.materials.glass.envMap=astronaut.materials.glass.envMap;avatar.materials.glassTwo.envMap=astronaut.materials.glassTwo.envMap;avatar.materials.glassTwo.envMapIntensity=1.2;avatar.materials.gold.envMap=astronaut.materials.gold.envMap;
           const labelCanvas=document.createElement('canvas');labelCanvas.width=512;labelCanvas.height=64;const c=labelCanvas.getContext('2d');c.fillStyle='rgba(5,14,19,.75)';c.fillRect(0,0,512,64);c.fillStyle='#c5e1dc';c.font='25px monospace';c.textAlign='center';c.fillText(member.name.toUpperCase(),256,41);
           const label=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(labelCanvas),transparent:true,depthTest:true}));label.scale.set(2.5,.3125,1);scene.add(label);
-          const rv=createRover(scene,wheelGroundAt,member.state.rover||roverState);
-          remote={name:member.name,astronaut:avatar,rover:rv,label,current:{...member.state},target:member.state,motion:new MotionBuffer()};remotes.set(member.id,remote);
+          remote={name:member.name,astronaut:avatar,label,current:{...member.state},target:member.state,motion:new MotionBuffer()};remotes.set(member.id,remote);
         }
         remote.sampleRig??=createSampleRig(remote.astronaut,terrain.sampleMesh);
         remote.target=member.state;
@@ -156,12 +156,12 @@ async function start(){
       }
     },
     onSpawn(position){
-      dismount=null;
+      dismount=null;vehicleId=null;seat=null;
       const x=clamp(position.x,-10950,10950),z=clamp(position.z,-10950,10950);terrain.update(x,z);
       riding=false;Object.assign(player,{x,z,y:terrain.groundAt(x,z),vx:0,vz:0,vy:0,speed:0,grounded:true});resolveObstacles(player,terrain.colliders);
       Object.assign(roverState,createRoverState(landscape.groundAt,player.x+3,player.z+2));resolveObstacles(roverState,terrain.colliders,1.08,null,r=>roverRockBlocks(roverState,r,landscape.groundAt));roverState.y=landscape.groundAt(roverState.x,roverState.z);
       terrain.update(player.x,player.z);toast('You joined the crew. Look for their callsigns on the surface.');
-    },onNotice:text=>{pendingSampleUntil=0;toast(text);},
+    },onNotice:text=>{pendingSampleUntil=0;toast(text);},onRoverNotice:text=>{pendingExit=null;seatPending=0;toast(text);},
     onSampleRequest:(id,state,request)=>sampling?.request(id,state,request),
     onSampleWorld:data=>{sampling?.accept(data);if(sampling?.busy())pendingSampleUntil=0;},
     onSampleReset:()=>{sampling?.reset();station.resetSamples();pendingSampleUntil=0;},
@@ -174,8 +174,8 @@ async function start(){
     }
   });
   sampling=createSampling({scene,groundAt,makeRock:terrain.sampleMesh,network:expedition,onNotice:toast,onEvent:e=>{if(e.type==='mission')station.receiveSample();if(started&&mode!=='orbit')sound.event(e,player,mode==='first'?yaw:followYaw);},onDust:p=>terrain.impactDust(new THREE.Vector3(p.x,p.y,p.z)),
-    obstacles:()=>[...terrain.colliders,...station.colliders,...flags.colliders,...expedition.sampleEntries().filter(e=>e.state.rover).map(e=>roverBody(e.state.rover,e.id,false))]});
-  const throwAim=createThrowAim(scene,groundAt,()=>[...terrain.colliders,...station.colliders,...flags.colliders,roverBody(roverState,'self',false),...[...remotes].flatMap(([id,r])=>bodiesFor(id,r.current))]);
+    obstacles:()=>[...terrain.colliders,...station.colliders,...flags.colliders,...fleetBodies()]});
+  const throwAim=createThrowAim(scene,groundAt,()=>[...terrain.colliders,...station.colliders,...flags.colliders,...fleetBodies(),...[...remotes].filter(([,r])=>!r.current.riding).map(([id,r])=>walkerBody(r.current,id))]);
   let aimView=null,throwPending=false;
   function restoreAimView(){
     if(!aimView)return;
@@ -218,13 +218,31 @@ async function start(){
   throwButton.addEventListener('pointerup',releaseAim);throwButton.addEventListener('pointercancel',cancelAim);
   throwButton.addEventListener('lostpointercapture',()=>{if(throwAim.active)cancelAim();});
   throwButton.addEventListener('click',event=>{if(event.detail===0)throwAim.active?releaseAim():beginAim();});
-  function syncDriver(){Object.assign(player,{x:roverState.x-Math.cos(roverState.yaw)*.39,z:roverState.z+Math.sin(roverState.yaw)*.39,y:roverState.y,yaw:roverState.yaw,vx:roverState.vx,vz:roverState.vz,vy:roverState.vy,speed:roverState.speed,grounded:roverState.grounded,landed:false});}
+  function fleetSeat(id){for(const v of expedition.rovers().vehicles){if(v.driver===id)return {v,role:'driver'};if(v.passenger===id)return {v,role:'passenger'};}return null;}
+  function fleetPose(v){return fleetBuffers.get(v.id)?.sample(performance.now())||v.state;}
+  function fleetBodies(exclude=null){return expedition.rovers().vehicles.filter(v=>v.id!==exclude).map(v=>roverBody(v.id===vehicleId?roverState:v.state,v.id,false));}
+  function nearestBuggy(){let best=null,d=Infinity;for(const v of expedition.rovers().vehicles){const n=Math.hypot(player.x-v.state.x,player.z-v.state.z);if(n<d){best=v;d=n;}}return {v:best,d};}
+  function syncFleetView(dt){
+    const world=expedition.rovers(),id=expedition.identity();if(id!==fleetIdentity){fleetBuffers.clear();fleetVersion=-1;fleetIdentity=id;}const reservation=fleetSeat(id);if(!reservation)releasingSeat=false;const assigned=releasingSeat?null:reservation;
+    if(world.version!==fleetVersion){fleetVersion=world.version;for(const v of world.vehicles){let b=fleetBuffers.get(v.id);if(!b){b=new MotionBuffer(100);fleetBuffers.set(v.id,b);}b.push(v.state,performance.now(),world.version,performance.now());}}
+    if(assigned){
+      if(!riding||vehicleId!==assigned.v.id||seat!==assigned.role){vehicleId=assigned.v.id;seat=assigned.role;riding=true;Object.assign(roverState,assigned.v.state);keys.clear();seatPending=0;followYaw=yaw=roverState.yaw;targetFollowDistance=6.8;sound.effect('board');controls();toast(seat==='driver'?'Driver seat / W / S drive  /  E exit':'Passenger seat / Enjoy the ride  /  E exit when stopped');}
+      if(seat==='passenger'||assigned.v.exiting){const old=roverState.yaw;Object.assign(roverState,seat==='passenger'?fleetPose(assigned.v):assigned.v.state);const turn=angleDelta(old,roverState.yaw);yaw+=turn;followYaw+=turn;}
+      if(pendingExit&&assigned.v.exiting===id){dismount=pendingExit;pendingExit=null;sound.effect('suit');}
+      if(!dismount)syncDriver();
+    }else if(riding&&!dismount){riding=false;seat=null;pendingExit=null;keys.clear();player.y=groundAt(player.x,player.z);controls();}
+    if(!riding){const selected=world.vehicles.find(v=>v.id===vehicleId)||world.vehicles.find(v=>v.id===id);if(selected){vehicleId=selected.id;Object.assign(roverState,fleetPose(selected));}}
+    for(const [key,m] of fleetModels)if(!world.vehicles.some(v=>v.id===key)){disposeObject(m.root);fleetModels.delete(key);fleetBuffers.delete(key);}
+    for(const v of world.vehicles){if(v.id===vehicleId){const m=fleetModels.get(v.id);if(m)m.root.visible=false;continue;}let m=fleetModels.get(v.id);if(!m){m=createRover(scene,wheelGroundAt,v.state);fleetModels.set(v.id,m);}m.root.visible=started&&Math.hypot(v.state.x-player.x,v.state.z-player.z)<450;if(m.root.visible)m.update(fleetPose(v),dt);}
+  }
+  function crewPose(id){const a=fleetSeat(id);if(!a)return null;const model=a.v.id===vehicleId?rover:fleetModels.get(a.v.id);return model?.driverPose(a.role);}
+  function syncDriver(){Object.assign(player,{x:roverState.x+Math.cos(roverState.yaw)*(seat==='passenger'?.39:-.39),z:roverState.z-Math.sin(roverState.yaw)*(seat==='passenger'?.39:-.39),y:roverState.y,yaw:roverState.yaw,vx:roverState.vx,vz:roverState.vz,vy:roverState.vy,speed:roverState.speed,grounded:roverState.grounded,landed:false});}
   let predictedContacts=0;
   function localContacts(){
     const body=riding?roverBody(roverState):walkerBody(player);
-    const others=station.colliders.concat(flags.colliders,riding?[]:[roverBody(roverState,'self',false)]);
+    const others=station.colliders.concat(flags.colliders,fleetBodies(riding?vehicleId:null));
     if(race)others.push(...race.obstacles());
-    for(const [id,r] of remotes)for(const b of bodiesFor(id,r.target))others.push({...b,state:{...b.state},invMass:0});
+    for(const [id,r] of remotes)if(!r.target.riding&&!r.target.arena)others.push({...walkerBody({...r.target},id),invMass:0});
     for(let pass=0;pass<2;pass++)for(const other of others)if(resolvePair(body,other,{predict:true}))predictedContacts++;
     if(riding){if(roverState.grounded)roverState.y=Math.max(roverState.y,landscape.groundAt(roverState.x,roverState.z));syncDriver();}
     else if(player.grounded)player.y=groundAt(player.x,player.z);
@@ -232,8 +250,8 @@ async function start(){
   function blockedAt(x,z,radius=.65,skipRover=false){
     if(terrain.colliders.some(r=>Math.hypot(x-r.x,z-r.z)<r.radius+radius&&r.top>groundAt(x,z)+.15))return true;
     const body=walkerBody({x,z,y:groundAt(x,z),yaw:0,vx:0,vz:0});body.radius=radius;
-    const others=station.colliders.concat(flags.colliders,skipRover?[]:[roverBody(roverState,'',false)]);
-    for(const [id,r] of remotes)others.push(...bodiesFor(id,r.target));
+    const others=station.colliders.concat(flags.colliders,skipRover?[]:fleetBodies());
+    for(const [id,r] of remotes)if(!r.target.riding&&!r.target.arena)others.push(walkerBody(r.target,id));
     return others.some(b=>contact(body,b));
   }
   function setWaypoint(destination){
@@ -275,6 +293,7 @@ async function start(){
   landmarks.push({...ARENA.gate,label:'Crater stadium entrance',short:'STADIUM'},{...SAMPLE_DEPOT,short:'SAMPLES'});
   const atlas=createAtlas({getState:()=>({player:{...player},navigation}),heightAt:landscape.heightAt,landmarks,onPin:setWaypoint,onOpen(){if(document.pointerLockElement)document.exitPointerLock();keys.clear();},onOrbit(site){if(!started)$('begin').click();setMode('orbit');universe.focusSite(site);$('orbit-site').textContent=`${site.name} · ${site.mission}`;},onStation(){
     if(!started)$('begin').click();
+    if(riding||dismount){toast('Step out of the buggy before visiting the station.');return;}
     riding=false;dismount=null;keys.clear();jumpRequested=false;const {x,z}=station.entrance;
     Object.assign(player,{x,z,y:groundAt(x,z),vx:0,vz:0,vy:0,speed:0,grounded:true});terrain.update(x,z);
     yaw=followYaw=0;pitch=-.08;followPitch=.22;targetFollowDistance=4.6;setMode('first');controls();toast('Research outpost: walk up the ramp. The airlocks open as you approach.');
@@ -296,7 +315,7 @@ async function start(){
   window.addEventListener('beforeunload',()=>expedition.leave());
   function controls(){
     if(race?.active()&&mode!=='orbit'){$('control-strip').innerHTML='<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>Y</kbd> Ready</span><span><kbd>E</kbd> Get out</span>';return;}
-    $('control-strip').innerHTML=mode==='orbit'?'<span><kbd>DRAG</kbd> Orbit</span><span><kbd>SCROLL</kbd> Zoom</span><span><kbd>1 / 2</kbd> Surface</span>':riding?'<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>E</kbd> Exit</span>':'<span><kbd>W A S D</kbd> Walk</span><span><kbd>SHIFT</kbd> Lope</span><span><kbd>F</kbd> Stone</span><span><kbd>G</kbd> Soil</span><span><kbd>B</kbd> Bag</span><span><kbd>HOLD T</kbd> Aim / throw</span><span><kbd>C</kbd> Costume</span><span><kbd>V</kbd> View</span>';
+    $('control-strip').innerHTML=mode==='orbit'?'<span><kbd>DRAG</kbd> Orbit</span><span><kbd>SCROLL</kbd> Zoom</span><span><kbd>1 / 2</kbd> Surface</span>':riding&&seat==='passenger'?'<span>PASSENGER</span><span><kbd>E</kbd> Exit when stopped</span>':riding?'<span><kbd>W / S</kbd> Drive / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>E</kbd> Exit</span>':'<span><kbd>W A S D</kbd> Walk</span><span><kbd>SHIFT</kbd> Lope</span><span><kbd>F</kbd> Stone</span><span><kbd>G</kbd> Soil</span><span><kbd>B</kbd> Bag</span><span><kbd>HOLD T</kbd> Aim / throw</span><span><kbd>C</kbd> Costume</span><span><kbd>V</kbd> View</span>';
     $('touch-jump').textContent=riding?'BRAKE':'JUMP';
   }
   function setCostume(next){
@@ -309,30 +328,30 @@ async function start(){
   setCostume(costume);
   function toggleRover(){
     cancelAim();
-    if(!started||mode==='orbit'||dismount)return;
+    if(!started||mode==='orbit'||dismount||pendingExit||performance.now()<seatPending)return;
     if(sampling.busy()||sampling.held()||pendingSampleUntil){toast('Finish sampling and put your stone in the bag before driving.');return;}
     if(riding){
       if(roverState.speed>.7){toast('Hold Space to stop before stepping out.');return;}
       if(!roverState.grounded){toast('Wait for the buggy to land before stepping out.');return;}
       let exit;
-      for(const side of [-1,1])for(const offset of [0,.55,-.55]){const x=roverState.x+Math.cos(roverState.yaw)*side*1.95+Math.sin(roverState.yaw)*offset,z=roverState.z-Math.sin(roverState.yaw)*side*1.95+Math.cos(roverState.yaw)*offset,y=groundAt(x,z);if(!exit&&!blockedAt(x,z,.38)&&Math.abs(y-roverState.y)<1.1)exit={x,y,z,yaw:roverState.yaw-side*Math.PI/2,side};}
+      for(const side of seat==='passenger'?[1,-1]:[-1,1])for(const offset of [0,.55,-.55]){const x=roverState.x+Math.cos(roverState.yaw)*side*1.95+Math.sin(roverState.yaw)*offset,z=roverState.z-Math.sin(roverState.yaw)*side*1.95+Math.cos(roverState.yaw)*offset,y=groundAt(x,z);if(!exit&&!blockedAt(x,z,.38)&&Math.abs(y-roverState.y)<1.1)exit={x,y,z,yaw:roverState.yaw-side*Math.PI/2,side};}
       if(!exit){toast('No clear footing beside the buggy. Move to flatter, open ground.');return;}
       roverState.vx=roverState.vz=roverState.vy=roverState.speed=0;
-      const start=new THREE.Vector3().setFromMatrixPosition(rover.driverPose().matrix);
-      dismount={progress:0,side:exit.side,from:{x:start.x,y:start.y,z:start.z,yaw:roverState.yaw},to:exit};
-      sound.effect('suit');
+      const start=new THREE.Vector3().setFromMatrixPosition(rover.driverPose(seat).matrix);
+      pendingExit={progress:0,side:exit.side,from:{x:start.x,y:start.y,z:start.z,yaw:roverState.yaw},to:exit};
+      expedition.requestRover({type:'exit'});
       toast('Stepping down from the buggy…');
     }else{
-      if(Math.hypot(player.x-roverState.x,player.z-roverState.z)>4.2){toast('Walk to your buggy, or use Locate my buggy.');return;}
-      riding=true;sound.effect('board');roverState.vx=roverState.vz=0;followYaw=yaw=roverState.yaw;targetFollowDistance=6.8;toast('W / S drive · A / D steer · Space brake · E exit');
+      const nearest=nearestBuggy();if(!nearest.v||nearest.d>4.2){toast('Walk beside a crew buggy to board.');return;}seatPending=performance.now()+1200;expedition.requestRover({type:'board',vehicle:nearest.v.id});
     }
     keys.clear();jumpRequested=false;controls();
   }
   $('rover-action').addEventListener('click',toggleRover);
   $('find-rover').addEventListener('click',()=>{
     if(mode==='orbit')setMode('follow');
-    const bearing=Math.atan2(-(roverState.x-player.x),-(roverState.z-player.z));followYaw=yaw=bearing;pitch=-.12;followPitch=.24;
-    toast(`Your buggy is ${Math.round(Math.hypot(player.x-roverState.x,player.z-roverState.z))} m ahead. Walk toward it and press E.`);
+    const home=expedition.rovers().vehicles.find(v=>v.id===expedition.identity())?.state||roverState;
+    const bearing=Math.atan2(-(home.x-player.x),-(home.z-player.z));followYaw=yaw=bearing;pitch=-.12;followPitch=.24;
+    toast(`Your buggy is ${Math.round(Math.hypot(player.x-home.x,player.z-home.z))} m ahead. Walk toward it and press E.`);
   });
   function requestLook(){
     if(mode!=='first'||!started||matchMedia('(pointer:coarse)').matches)return;
@@ -496,9 +515,9 @@ async function start(){
       $('metric-c').textContent=dismount?'STEPPING DOWN':riding?(roverState.grounded?'DRIVING / LRV':'LRV / AIRBORNE'):!player.grounded?(player.vy>0?'ASCENDING':'DESCENDING'):player.speed>.1?(player.speed>1.65?'LOPING':'WALKING'):'STANDING';
       $('coordinates').textContent=`${Math.abs(player.x).toFixed(1)} ${player.x>=0?'E':'W'}  /  ${Math.abs(player.z).toFixed(1)} ${player.z<=0?'N':'S'}  m`;
       $('surface-state').textContent=riding?'LUNAR ROVING VEHICLE / ELECTRIC DRIVE':player.grounded?'CONTACT / REGOLITH':'FREE FLIGHT / 1.62 m/s²';
-      const roverDistance=Math.hypot(player.x-roverState.x,player.z-roverState.z);
-      $('rover-status').textContent=riding?'YOU ARE AT THE WHEEL':`BUGGY · ${roverDistance.toFixed(0)} M AWAY`;
-      $('rover-hint').textContent=riding?'W / S drive. A / D steer. Space brakes.':roverDistance<4.2?'Your buggy is within reach. Press E to drive.':'The gold square on your map marks your buggy.';
+      const nearest=nearestBuggy(),roverDistance=nearest.d;
+      $('rover-status').textContent=riding?(seat==='passenger'?'PASSENGER / CREW BUGGY':'DRIVER / CREW BUGGY'):`BUGGY · ${roverDistance.toFixed(0)} M AWAY`;
+      $('rover-hint').textContent=riding?(seat==='passenger'?'Your crewmate drives. E to exit when stopped.':'W / S drive. A / D steer. Space brakes.'):roverDistance<4.2?(nearest.v?.driver?'Press E for the passenger seat.':'Press E to take the driver seat.'):'The gold square on your map marks your buggy.';
       $('rover-action').innerHTML=dismount?'Stepping down…':riding?'Exit buggy <kbd>E</kbd>':'Enter buggy <kbd>E</kbd>';$('rover-action').disabled=!!dismount||!riding&&roverDistance>=4.2;$('find-rover').hidden=riding;
       const heading=((-((mode==='first'?yaw:followYaw)*180/Math.PI)%360)+360)%360;$('heading').textContent=String(Math.round(heading)%360).padStart(3,'0')+'°';drawMap();
     }
@@ -510,7 +529,7 @@ async function start(){
   let lastBound=-10,lastVehicleImpact=-10;
   function animate(){
     requestAnimationFrame(animate);
-    const dt=Math.min(clock.getDelta(),.08);expedition.update(performance.now()/1000);if(document.hidden)return;
+    const dt=Math.min(clock.getDelta(),.08);expedition.update(performance.now()/1000);if(document.hidden)return;syncFleetView(dt);
     race.update(dt,player,started&&mode!=='orbit');
     const racePose=race.pose();
     if(race.active()&&racePose){
@@ -527,7 +546,7 @@ async function start(){
       const input={x:Math.cos(angle)*inputX-Math.sin(angle)*inputZ,z:-Math.sin(angle)*inputX-Math.cos(angle)*inputZ,fast,jump:jumpRequested};
       accumulator=Math.min(accumulator+dt,.16);
       while(accumulator>=FIXED_STEP){
-        if(riding){
+        if(riding&&(seat==='passenger'||fleetSeat(expedition.identity())?.v.exiting)){syncDriver();}else if(riding){
           const oldYaw=roverState.yaw,oldX=player.x,oldZ=player.z,oldSpeed=roverState.speed;
           stepRover(roverState,{throttle:inputZ,steer:-inputX,brake:keys.has('Space'),fast},FIXED_STEP,landscape.groundAt,vehicleRocks(roverState.x,roverState.z,7),vehicleSurface);
           if(oldSpeed-roverState.speed>1)sound.effect('collision',Math.min(1.5,(oldSpeed-roverState.speed)/3));
@@ -581,9 +600,9 @@ async function start(){
     rover.update(roverState,dt);
     if(dismount){
       dismount.progress=Math.min(1,dismount.progress+dt/DISMOUNT_SECONDS);Object.assign(player,exitPosition(dismount),{vx:0,vz:0,vy:0,speed:0});
-      astronaut.updateDismount({...player,rover:roverState},dt,rover.driverPose(),dismount);
-      if(dismount.progress>=1){Object.assign(player,dismount.to,{grounded:true,landed:false});dismount=null;riding=false;keys.clear();accumulator=0;controls();localContacts();toast('Back on foot. E to get back in.');}
-    }else if(race.active())astronaut.updateSeated(racePose||player,dt,race.driverPose(expedition.identity()));else if(riding)astronaut.updateSeated({...player,rover:roverState},dt,rover.driverPose());else astronaut.update({...player,sampling:!!task},dt,pitch);
+      astronaut.updateDismount({...player,rover:roverState},dt,rover.driverPose(seat),dismount);
+      if(dismount.progress>=1){Object.assign(player,dismount.to,{grounded:true,landed:false});releasingSeat=true;expedition.requestRover({type:'leave'});dismount=null;riding=false;seat=null;keys.clear();accumulator=0;controls();localContacts();toast('Back on foot. E to get back in.');}
+    }else if(race.active())astronaut.updateSeated(racePose||player,dt,race.driverPose(expedition.identity()));else if(riding)astronaut.updateSeated({...player,rover:roverState},dt,rover.driverPose(seat));else astronaut.update({...player,sampling:!!task},dt,pitch);
     sampleRig.update({...player,aiming:throwAim.active},samplePerson,sampling.time());if(!task)player.landed=false;astronaut.root.visible=started&&mode!=='orbit';astronaut.head.visible=mode!=='first';
     if(race.active()&&racePose?.dead)astronaut.root.visible=false;
     if(navigation.destination&&navigation.status==='ready'){
@@ -597,8 +616,8 @@ async function start(){
       remote.astronaut.setCostume(p.costume||1);
       const raceRemote=race.remotePose(remoteId),raceSeat=race.driverPose(remoteId),display=raceRemote||p;
       remote.astronaut.root.visible=started&&mode!=='orbit'&&!raceRemote?.dead&&Math.hypot(display.x-player.x,display.z-player.z)<300;
-      if(p.rover){remote.rover.root.visible=started&&Math.hypot(p.rover.x-player.x,p.rover.z-player.z)<450;remote.rover.update(p.rover,dt);}else remote.rover.root.visible=false;
-      if(raceSeat&&raceRemote)remote.astronaut.updateSeated(raceRemote,dt,raceSeat);else if(p.riding&&p.rover){if(p.dismount)remote.astronaut.updateDismount(p,dt,remote.rover.driverPose(),p.dismount);else remote.astronaut.updateSeated(p,dt,remote.rover.driverPose());}else remote.astronaut.update({...p,sampling:!!sampling.person(remoteId)?.action},dt);
+      const sharedPose=crewPose(remoteId);
+      if(raceSeat&&raceRemote)remote.astronaut.updateSeated(raceRemote,dt,raceSeat);else if(sharedPose){if(p.dismount)remote.astronaut.updateDismount(p,dt,sharedPose,p.dismount);else remote.astronaut.updateSeated(p,dt,sharedPose);}else remote.astronaut.update({...p,sampling:!!sampling.person(remoteId)?.action},dt);
       remote.sampleRig.update(p,sampling.person(remoteId),sampling.time());
       remote.label.visible=remote.astronaut.root.visible;remote.label.position.set(display.x,display.y+3.2,display.z);
     }
@@ -608,12 +627,12 @@ async function start(){
   }
   // Read-only diagnostic snapshot used by the local integration checks.
   race=createRacing({scene,groundAt:landscape.groundAt,makeRock:terrain.sampleMesh,rockEnvironment:{nearby:terrain.nearbyRocks,surfaceAt:terrain.vehicleSurfaceAt},network:expedition,sound,toast,getPlayer:()=>player,
-    canBoard:()=>{if(!started||riding||dismount||sampling.busy()||sampling.held()){toast('Get out of your buggy and stow your sample before boarding.');return false;}return true;},
+    canBoard:()=>{if(!started||riding||dismount||performance.now()<seatPending||sampling.busy()||sampling.held()){toast('Get out of your buggy and stow your sample before boarding.');return false;}return true;},
     onEnter:p=>{cancelAim();keys.clear();accumulator=0;lastRaceYaw=p.yaw;followYaw=yaw=p.yaw;setMode('follow');controls();targetFollowDistance=9.5;followPitch=.27;toast('W/S drive · A/D steer · Space brake · Y ready · E get out. Open STADIUM for friends and race start.');},
     onExit:p=>{keys.clear();accumulator=0;lastRaceYaw=null;if(p){const x=p.x+Math.cos(p.yaw)*3.2,z=p.z-Math.sin(p.yaw)*3.2;Object.assign(player,{x,z,y:groundAt(x,z),vx:0,vz:0,vy:0,speed:0,grounded:true});terrain.update(x,z);}targetFollowDistance=4.6;controls();toast('Back on foot beside the vehicle.');},
     openCrew:()=>{$('crew-button').click();},onRoute:setWaypoint});
   window.seleneRace=Object.freeze({snapshot:race.snapshot});
   window.seleneSound=Object.freeze({snapshot:sound.snapshot});
-  window.selene=Object.freeze({snapshot:()=>({aim:throwAim.snapshot(),streaming:terrain.streaming(),costume,samples:sampling.snapshot(),ready,started,mode,riding,dismount:dismount?{...dismount}:null,navigation:{...navigation,points:navigation.points.map(p=>({...p}))},flagExhibits:flags.exhibits.map(f=>({id:f.id,x:f.x,z:f.z,design:f.design})),avatarPosition:astronaut.root.position.toArray(),handErrors:astronaut.handErrors(),station:station.snapshot(),atlas:atlas.snapshot(),predictedContacts,renderedRemotes:[...remotes.values()].map(r=>({name:r.name,state:r.current,handErrors:r.astronaut.handErrors(),samples:r.motion.samples.length})),rover:{...roverState},network:expedition.snapshot(),remoteCount:remotes.size,nearbyRocks:terrain.rocks.filter(r=>Math.hypot(r.x-player.x,r.z-player.z)<20).map(r=>({...r})),player:{...player},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},orbitDistance:universe.state.distance,targetOrbitDistance:universe.state.targetDistance,moonRadius:MOON_RADIUS,earthDistance:EARTH_DISTANCE,footsteps:footstepCount,feet:astronaut.legs.map(l=>({position:l.world.toArray(),swing:l.swing,kneeQuaternion:l.lower.quaternion.toArray(),hipQuaternion:l.upper.quaternion.toArray()})),fps,ground:groundAt(player.x,player.z),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})});
+  window.selene=Object.freeze({snapshot:()=>({aim:throwAim.snapshot(),streaming:terrain.streaming(),costume,samples:sampling.snapshot(),ready,started,mode,riding,seat,vehicleId,fleet:expedition.rovers(),dismount:dismount?{...dismount}:null,navigation:{...navigation,points:navigation.points.map(p=>({...p}))},flagExhibits:flags.exhibits.map(f=>({id:f.id,x:f.x,z:f.z,design:f.design})),avatarPosition:astronaut.root.position.toArray(),handErrors:astronaut.handErrors(),station:station.snapshot(),atlas:atlas.snapshot(),predictedContacts,renderedRemotes:[...remotes.values()].map(r=>({name:r.name,state:r.current,avatarPosition:r.astronaut.root.position.toArray(),handErrors:r.astronaut.handErrors(),samples:r.motion.samples.length})),rover:{...roverState},network:expedition.snapshot(),remoteCount:remotes.size,nearbyRocks:terrain.rocks.filter(r=>Math.hypot(r.x-player.x,r.z-player.z)<20).map(r=>({...r})),player:{...player},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},orbitDistance:universe.state.distance,targetOrbitDistance:universe.state.targetDistance,moonRadius:MOON_RADIUS,earthDistance:EARTH_DISTANCE,footsteps:footstepCount,feet:astronaut.legs.map(l=>({position:l.world.toArray(),swing:l.swing,kneeQuaternion:l.lower.quaternion.toArray(),hipQuaternion:l.upper.quaternion.toArray()})),fps,ground:groundAt(player.x,player.z),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})});
   animate();
 }

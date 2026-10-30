@@ -2,7 +2,7 @@ import {clamp} from './physics.js';
 // Metres, kg, seconds. Oriented chassis boxes and upright astronaut circles.
 export function roverBody(state,owner='',dynamic=true){return {state,owner,kind:'rover',shape:'box',hx:1.15,hz:1.52,height:1.65,invMass:dynamic?1/400:0};}
 export function walkerBody(state,owner=''){return {state,owner,kind:'player',shape:'circle',radius:.34,height:1.95,invMass:1/180};}
-export function bodiesFor(owner,state){const list=[];if(state.arena)return list;if(state.rover)list.push(roverBody(state.rover,owner,state.riding));if(!state.riding)list.push(walkerBody(state,owner));return list;}
+export function bodiesFor(owner,state){const list=[];if(state.arena)return list;if(state.rover&&(!state.sharedRover||state.seat==='driver'))list.push(roverBody(state.rover,owner,state.riding));if(!state.riding)list.push(walkerBody(state,owner));return list;}
 function axes(b){const c=Math.cos(b.state.yaw||0),s=Math.sin(b.state.yaw||0);return [{x:c,z:-s},{x:s,z:c}];}
 function extent(b,n){if(b.shape==='circle')return b.radius;const [x,z]=axes(b);return Math.abs(x.x*n.x+x.z*n.z)*b.hx+Math.abs(z.x*n.x+z.z*n.z)*b.hz;}
 export function contact(a,b){

@@ -41,6 +41,9 @@ export function createRover(scene,groundAt,state){
   for(let i=0;i<3;i++){const a=i*Math.PI*2/3;strut(steeringWheel,[0,0,0],[Math.cos(a)*.16,Math.sin(a)*.16,0],.011);}
   mesh(steeringWheel,new THREE.CylinderGeometry(.045,.045,.025,16),alloy).rotation.x=Math.PI/2;
   const grips=[-1,1].map(side=>{const grip=new THREE.Object3D();grip.position.set(side*.18,0,0);steeringWheel.add(grip);return grip;});
+  const passengerAnchor=new THREE.Object3D();passengerAnchor.position.set(.39,-.02,0);chassis.add(passengerAnchor);
+  const passengerGrips=[-.18,.18].map(x=>{const p=new THREE.Object3D();p.position.set(.39+x,1.1,-.45);chassis.add(p);return p;});
+  strut(chassis,[.13,1.1,-.45],[.65,1.1,-.45],.022,black);
   const driverAnchor=new THREE.Object3D();driverAnchor.position.set(-.39,-.02,0);chassis.add(driverAnchor);
   box(chassis,1.3,.23,.58,foil,0,.8,1.04);box(chassis,1.36,.04,.6,white,0,.93,1.04);
   for(const x of [-.62,.62])strut(chassis,[x,.95,.77],[x,.95,1.32],.018);
@@ -161,7 +164,7 @@ export function createRover(scene,groundAt,state){
     }
   }
   update(state,.016);
-  function driverPose(){root.updateMatrixWorld(true);return {matrix:driverAnchor.matrixWorld.clone(),grips:grips.map(g=>g.getWorldPosition(new THREE.Vector3()))};}
+  function driverPose(seat='driver'){root.updateMatrixWorld(true);return {matrix:(seat==='passenger'?passengerAnchor:driverAnchor).matrixWorld.clone(),grips:(seat==='passenger'?passengerGrips:grips).map(g=>g.getWorldPosition(new THREE.Vector3()))};}
   function suspensionSnapshot(){root.updateMatrixWorld(true);return wheels.map(w=>({hubY:w.hubY,velocity:w.velocity,contactGap:w.contactGap,hub:w.carrier.getWorldPosition(new THREE.Vector3()).toArray(),armLengths:w.arms.map(a=>a.localToWorld(new THREE.Vector3(w.side*armLength,0,0)).distanceTo(a.getWorldPosition(new THREE.Vector3()))),jointErrors:w.arms.map((a,i)=>a.localToWorld(new THREE.Vector3(w.side*armLength,0,0)).distanceTo(w.carrier.localToWorld(new THREE.Vector3(0,i*.20,0)))),springLength:w.coil.scale.y}));}
   return {root,update,driverPose,suspensionSnapshot};
 }

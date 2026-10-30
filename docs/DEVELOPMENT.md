@@ -110,3 +110,11 @@ README images and GIFs have a separate [source manifest and conversion guide](me
 [The Pages workflow](../.github/workflows/pages.yml) packages the playable files on pushes to `main` and supports manual dispatch. It copies the entry HTML, styles, `src/`, `assets/` and `vendor/`; README media and raw recordings are excluded from the playable deployment.
 
 Check [workflow runs](https://github.com/TharunBabu-05/moon_walker/actions/workflows/pages.yml) for deployment status. GitHub Pages hosts the static application; it does not provide the multiplayer simulation or relay movement packets.
+
+### Shared exploration buggies and stadium HUD
+
+Exploration vehicles keep a stable owner ID while the host serializes driver/passenger reservations in SharedRovers. Only the assigned driver publishes vehicle motion; both seated avatars use the same interpolated chassis, with separate seat anchors and passenger grab handles. Exiting reserves the seat and brakes the vehicle until the climb-out finishes. A disconnected driver's buggy stops and is recovered to the surface. Passengers can exit and reboard to take an empty driver seat. Protocol 15 requires everyone to refresh and create a new crew invite.
+
+The stadium garage sits 100 m outside the start checkpoint, clear of the course fences. Twelve access lamp posts share the existing four nearby spotlight slots. Starting a heat places ready cars on the grid, leaving unoccupied vehicles in the garage. The top-center standings use completed laps, ordered checkpoints, then distance to the next checkpoint; finishers sort by final time. Each row includes elapsed total and current lap time.
+
+Checks: npm run test:crew-rovers, npm run test:crew-rovers-browser, npm run test:stadium-updates, and npm run test:stadium-score-multiplayer. Browser checks use SELENE_BROWSER_CHANNEL=msedge where Chrome is unavailable. Use SELENE_LOCAL_SIGNAL=1 for the race multiplayer check to exercise real local WebRTC without the public signalling service. Test-only spawn fixtures are not exposed by the game.

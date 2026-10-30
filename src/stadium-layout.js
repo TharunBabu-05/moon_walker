@@ -9,7 +9,9 @@ export const CHECKPOINTS=Array.from({length:16},(_,i)=>({...coursePoint(i/16),na
 export const PADDOCK={...coursePoint(0)};
 const dips=[.09,.28,.43,.66,.87].map(coursePoint);
 const tangent=coursePoint(.001),gridYaw=Math.atan2(-(tangent.x-PADDOCK.x),-(tangent.z-PADDOCK.z));
-export function gridPlace(slot){const side=36+(slot%4-1.5)*7,back=Math.floor(slot/4)*10;return {x:PADDOCK.x+Math.cos(gridYaw)*side+Math.sin(gridYaw)*back,z:PADDOCK.z-Math.sin(gridYaw)*side+Math.cos(gridYaw)*back,yaw:gridYaw};}
+export function gridPlace(slot){return {x:PARKING.x-Math.floor(slot/4)*14,z:PARKING.z+(slot%4-1.5)*12,yaw:gridYaw};}
+export const PARKING={x:PADDOCK.x-100,z:PADDOCK.z};
+export const ACCESS_LIGHTS=Array.from({length:12},(_,i)=>{const t=i/11;return {x:STADIUM.gate.x+(PARKING.x-STADIUM.gate.x)*t,z:STADIUM.gate.z+(PARKING.z-STADIUM.gate.z)*t+(i%2?14:-14)};});
 export const ROCKFALLS=[.20,.36,.54,.76].map((t,i)=>({...coursePoint(t),id:i,radius:3.4+i*.35,period:19+i*3,warning:4,drop:30+i*5}));
 export const ARCHES=[.14,.35,.53,.72].map(coursePoint);
 export const ARCH_PILLARS=ARCHES.flatMap(p=>{const a=Math.atan2(p.z-STADIUM.z,p.x-STADIUM.x);return [-1,1].map(s=>({x:p.x+Math.cos(a)*s*49,z:p.z+Math.sin(a)*s*49,radius:17}));});
@@ -39,10 +41,11 @@ export function stadiumSurface(x,z,original,anchor){
   h+=72*Math.exp(-(((a+.65)/.34)**2))*Math.exp(-(((r-820)/240)**2));
   for(const p of dips){const d=Math.hypot(x-p.x,z-p.z);if(d<32)h-=4*(1-smooth(d,0,32));}
   const pad=Math.hypot(x-PADDOCK.x,z-PADDOCK.z);h=h+(anchor-5-h)*(1-smooth(pad,38,100));
+  const parking=Math.hypot(x-PARKING.x,z-PARKING.z);h+=(anchor-5-h)*(1-smooth(parking,38,80));
   const corridor=(1-smooth(Math.abs(dz),28,65))*smooth(dx,-1380,-1250)*(1-smooth(dx,-800,-650));
   const accessHeight=anchor-5+clamp((-dx-800)/400,0,1)*45;
   h+=(accessHeight-h)*corridor;
   for(const rock of SLOPE_ROCKS)h+=slopeRockHeight(rock,x,z);
   return original+(h-original)*(1-smooth(r,1250,1420));
 }
-export function clearRaceLane(x,z){const r=Math.hypot(x-STADIUM.x,z-STADIUM.z);return r<1200&&(Math.abs(courseInfo(x,z).offset)<23||Math.hypot(x-PADDOCK.x,z-PADDOCK.z)<65)||Math.abs(z-STADIUM.z)<20&&x>250&&x<PADDOCK.x;}
+export function clearRaceLane(x,z){const r=Math.hypot(x-STADIUM.x,z-STADIUM.z);return r<1200&&(Math.abs(courseInfo(x,z).offset)<23||Math.hypot(x-PADDOCK.x,z-PADDOCK.z)<65||Math.hypot(x-PARKING.x,z-PARKING.z)<48)||Math.abs(z-STADIUM.z)<20&&x>250&&x<PADDOCK.x;}

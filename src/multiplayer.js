@@ -1,8 +1,9 @@
+import {SharedRovers} from './shared-rovers.js';
 import {reconcileContacts} from './contacts.js';
 export const MAX_CREW=8;
 // Changing the wire contract requires a fresh room so an older client cannot
 // silently omit pose fields that affect shared animation.
-const PROTOCOL=14;
+const PROTOCOL=15;
 const PREFIX=`selene-expedition-${PROTOCOL}-`;
 const numeric=['x','y','z','vx','vy','vz','yaw','speed','distance'];
 
@@ -13,7 +14,7 @@ export function sanitizeState(value){
   if(Math.abs(p.x)>11020||Math.abs(p.z)>11020||Math.abs(p.y)>5000||p.speed<0||p.speed>40)return null;
   p.grounded=!!value.grounded;p.riding=!!value.riding;p.aiming=!!value.aiming;p.landed=false;p.landingSpeed=0;
   p.costume=value.costume===2?2:1;
-  p.arena=!!value.arena;
+  p.arena=!!value.arena;p.sharedRover=true;p.vehicleId=typeof value.vehicleId==='string'?value.vehicleId.slice(0,100):null;p.seat=['driver','passenger'].includes(value.seat)?value.seat:null;
   p.ack=Number.isSafeInteger(value.ack)?value.ack:0;
   if(value.dismount&&p.riding){const d=value.dismount;if(Number.isFinite(d.progress)&&d.progress>=0&&d.progress<=1&&[d.from,d.to].every(v=>v&&['x','y','z','yaw'].every(k=>Number.isFinite(v[k])))&&Math.hypot(d.from.x-d.to.x,d.from.z-d.to.z)<5)p.dismount={progress:d.progress,side:d.side===1?1:-1,from:{...d.from},to:{...d.to}};}
   if(value.rover&&typeof value.rover==='object'){
@@ -40,15 +41,18 @@ async function loadPeer(){
   return library;
 }
 
-export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,onCorrection=()=>{},onSampleRequest=()=>{},onSampleWorld=()=>{},onSampleReset=()=>{},onRaceRequest=()=>{},onRaceWorld=()=>{},onRaceReset=()=>{}}){
+export function createExpedition({getState,roverGround=null,onChange,onRoster,onSpawn,onNotice,onRoverNotice=onNotice,onCorrection=()=>{},onSampleRequest=()=>{},onSampleWorld=()=>{},onSampleReset=()=>{},onRaceRequest=()=>{},onRaceWorld=()=>{},onRaceReset=()=>{}}){
   let peer=null,host=false,code='',name='Explorer',phase='solo',message='Explore solo, or invite a crew.',lastSend=0,generation=0;
+  const fleet=new SharedRovers(roverGround);let fleetView=fleet.snapshot();
+  const fleetEntries=()=>[{id:phase==='connected'?peer.id:'solo',state:getState()},...[...members].filter(([,m])=>m.state).map(([id,m])=>({id,state:m.state}))];
+  function syncFleet(){fleet.sync(fleetEntries());fleetView=fleet.snapshot();}
   const links=new Map(),members=new Map(),pending=new Map();let connectionTimer,lastBroadcast=-Infinity,sequence=0,ack=0,correctionSerial=0,contactCount=0;
   const notify=()=>onChange({phase,host,code,name,message,count:phase==='connected'?members.size+1:1,max:MAX_CREW});
   const send=(link,data)=>{if(link?.open&&link.bufferSize<3){try{link.send(data);}catch{/* closed between frames */}}};
   const broadcast=data=>links.forEach(link=>send(link,data));
   const roster=()=>onRoster([...members].map(([id,m])=>({id,...m})));
   function disconnect(showNotice=false){
-    generation++;clearTimeout(connectionTimer);
+    generation++;clearTimeout(connectionTimer);fleet.reset();fleetView=fleet.snapshot();
     if(host)broadcast({type:'ended'});
     for(const link of links.values())link.close();links.clear();peer?.destroy();peer=null;
     members.clear();pending.clear();sequence=ack=correctionSerial=contactCount=0;host=false;code='';phase='solo';message='Explore solo, or invite a crew.';onSampleReset();roster();notify();
@@ -59,7 +63,7 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
   const payload=()=>({name,state:sanitizeState({...getState(),ack}),stamp:performance.now(),seq:++sequence});
   function publishRoster(){
     if(performance.now()-lastBroadcast>=45){
-      const local={id:peer.id,...payload()};
+      syncFleet();const local={id:peer.id,...payload()};
       const entries=[local,...[...members].filter(([id,m])=>m.state&&!pending.has(id)).map(([id,m])=>({id,...m}))];
       for(const result of reconcileContacts(entries)){
         const serial=++correctionSerial;contactCount++;
@@ -69,6 +73,7 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
           pending.set(result.id,{serial,since:performance.now()});send(links.get(result.id),{type:'correction',serial,change:result.change});
         }
       }
+      broadcast({type:'rover-world',world:fleetView});
       broadcast({type:'world',members:[local,...[...members].map(([id,m])=>({id,...m}))]});lastBroadcast=performance.now();
     }
     roster();notify();
@@ -120,6 +125,10 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
         link.on('data',data=>{
           if(session!==generation||!data||typeof data!=='object')return;
           if(host){
+            if(data.type==='rover-request'&&members.has(link.peer)){
+              if(!['board','exit','leave'].includes(data.request?.type))return;
+              syncFleet();const error=fleet.request(link.peer,data.request,members.get(link.peer).state);fleetView=fleet.snapshot();broadcast({type:'rover-world',world:fleetView});if(error)send(link,{type:'rover-notice',message:error});return;
+            }
             if(data.type==='race-request'&&members.has(link.peer)){
               const type=data.request?.type;if(!['input','join','leave','ready','start','practice','end'].includes(type))return;
               const member=members.get(link.peer),now=performance.now(),field=type==='input'?'lastRaceInput':'raceControl-'+type;if(now-(member[field]||0)<(type==='input'?25:200))return;member[field]=now;
@@ -135,8 +144,11 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
             const correction=pending.get(link.peer);
             if(correction&&state.ack<correction.serial&&performance.now()-correction.since<1500)return;
             pending.delete(link.peer);Object.assign(member,{state,stamp:data.stamp,seq:data.seq});publishRoster();
+          }else if(data.type==='rover-world'){
+            const w=data.world;if(w&&Number.isSafeInteger(w.version)&&Array.isArray(w.vehicles)&&w.vehicles.length<=MAX_CREW*2&&w.vehicles.every(v=>typeof v.id==='string'&&v.state&&['x','y','z','vx','vy','vz','yaw','speed','wheelTravel'].every(k=>Number.isFinite(v.state[k]))))fleetView=w;
           }else if(data.type==='race-world')onRaceWorld(data.world);
           else if(data.type==='sample-world')onSampleWorld(data.world);
+          else if(data.type==='rover-notice')onRoverNotice(String(data.message).slice(0,160));
           else if(data.type==='sample-notice'||data.type==='race-notice')onNotice(String(data.message).slice(0,160));
           else if(data.type==='welcome'&&Number.isFinite(data.spawn?.x)&&Number.isFinite(data.spawn?.z))onSpawn(data.spawn);
           else if(data.type==='world'&&Array.isArray(data.members)){
@@ -165,6 +177,8 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
   }
   notify();
   return {
+    rovers:()=>fleetView,
+    requestRover(request){if(host||phase!=='connected'){syncFleet();const error=fleet.request(phase==='connected'?peer.id:'solo',request,getState());fleetView=fleet.snapshot();broadcast({type:'rover-world',world:fleetView});if(error)onRoverNotice(error);}else for(const link of links.values()){send(link,{type:'state',...payload()});send(link,{type:'rover-request',request});}},
     identity:()=>phase==='connected'?peer.id:'solo',
     authority:()=>host||phase!=='connected',
     requestRace(request){if(host||phase!=='connected'){const notice=onRaceRequest(phase==='connected'?peer.id:'solo',request,name);if(notice)onNotice(notice);}else for(const link of links.values()){if(request.type==='join')send(link,{type:'state',...payload()});send(link,{type:'race-request',request});}},
@@ -180,7 +194,7 @@ export function createExpedition({getState,onChange,onRoster,onSpawn,onNotice,on
       }
     },
     host:name=>open('host','',name),join:(room,name)=>open('join',room,name),leave:()=>disconnect(true),
-    update(now){if(phase!=='connected'||now-lastSend<.05)return;lastSend=now;if(host)publishRoster();else {const data={type:'state',...payload()};for(const link of links.values())send(link,data);}},
+    update(now){if(phase!=='connected'){syncFleet();return;}if(now-lastSend<.05)return;lastSend=now;if(host)publishRoster();else {const data={type:'state',...payload()};for(const link of links.values())send(link,data);}},
     snapshot:()=>({phase,host,code,contactCount,sendRate:20,count:phase==='connected'?members.size+1:1,members:[...members].map(([id,m])=>({id,name:m.name,state:m.state}))}),
     invite(){const url=new URL(location.href);url.search='';url.hash='';url.searchParams.set('room',code);return url.href;}
   };

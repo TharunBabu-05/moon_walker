@@ -52,12 +52,12 @@ The orbital view uses mean body radii and mean Earth–Moon separation. At this 
 
 ## Drive the lunar buggy
 
-Approach your buggy and press **E** to board. Drive in first person or orbit the camera around the vehicle. The astronaut grips the steering wheel, and stopping before exiting triggers the climb-out animation.
+Approach any stopped exploration buggy and press **E** to board. The first entrant drives; the second sits beside them as a passenger, even when the buggy belongs to a crewmate. Stop before either person exits. To swap drivers, both get out and the new driver boards first. Drive in first person or orbit the camera around the vehicle. The astronaut grips the steering wheel, and stopping before exiting triggers the climb-out animation.
 
 | A vehicle for the expedition | Connected suspension |
 | :---: | :---: |
 | ![Player driving a lunar buggy across the highlands](docs/media/buggy-expedition.webp) | ![Development view of the buggy with connected suspension arms and wheel assemblies](docs/media/suspension.webp) |
-| Each crew member has their own exploration buggy. | Wishbones, steering knuckles, coil springs and telescoping dampers connect the wheels to the chassis. |
+| Each crew member spawns with a shared two-seat exploration buggy. | Wishbones, steering knuckles, coil springs and telescoping dampers connect the wheels to the chassis. |
 
 Tyres respond to small bumps while low stones between the wheel tracks can pass beneath the chassis. Taller rocks block the vehicle with a small rebound, chassis response and impact dust. Tilted and steered tyres follow slope contact, and the buggy carries uphill momentum into lunar flight when cresting a ridge. These are tuned game physics, not a full engineering vehicle simulation.
 
@@ -124,10 +124,10 @@ Drive Rustwalker, six-wheel Iron Mule, roofed Dune Jackal or Red Prospector. The
 ### Start a race with friends
 
 1. Create or join a **CREW** expedition using an invite link or expedition code.
-2. Open **STADIUM → Route to parked vehicles** and travel to the paddock. Approach a free racer and press **E** within 6 m to board.
+2. Open **STADIUM → Route to parked vehicles** and follow the entrance lamps to the off-track garage. Approach a free racer and press **E** within 6 m to board.
 3. Every seated driver presses **Y** or selects **Ready**. **R** remains the stone-retrieval key while on foot.
 4. With **at least two ready drivers**, the host selects **Host: start race**. Joining the crew alone does not start a race. Use **Solo practice** when playing alone.
-5. After the shared **five-second countdown**, pass **16 checkpoints in order** for **two laps**. The large **START / FINISH** gantry marks the lap line. Finish times appear in the race UI.
+5. Ready drivers are placed at the start gantry. After the shared **five-second countdown**, pass **16 checkpoints in order** for **two laps**. The large **START / FINISH** gantry marks the lap line. The top-center display shows position, lap, elapsed race time, and each driver's current lap time. Finishers retain their final time; standings sort by completed laps, ordered checkpoints and progress.
 
 Vehicle collisions and falling rocks cause damage. Destruction triggers recovery **after four seconds at the destruction position**, followed by two seconds of protection. This build is a checkpoint race with environmental hazards; it has no guns or AI opponents. Stop and press **E** to step out beside your car.
 

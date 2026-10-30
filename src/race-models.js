@@ -3,7 +3,7 @@ import {mergeGeometries} from '../vendor/utils/BufferGeometryUtils.js';
 import {CARS} from './race-physics.js';
 import {createTrackFences} from './track-fence-models.js';
 import {buildRockHeightfield,sampleRockHeightfield} from './rock-heightfield.js';
-import {STADIUM,TAU,CHECKPOINTS,ROCKFALLS,rockfallPose,coursePoint,ARCHES,SLOPE_ROCKS,slopeRockHeight} from './stadium-layout.js';
+import {STADIUM,PARKING,ACCESS_LIGHTS,TAU,CHECKPOINTS,ROCKFALLS,rockfallPose,coursePoint,ARCHES,SLOPE_ROCKS,slopeRockHeight} from './stadium-layout.js';
 const metal=(color,roughness=.65)=>new THREE.MeshStandardMaterial({color,roughness,metalness:.32});
 const up=new THREE.Vector3(0,1,0);
 function mesh(root,geo,mat,x=0,y=0,z=0){const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;root.add(m);return m;}
@@ -111,6 +111,9 @@ export function createStadium(scene,ground,makeRock){
     }
     floodlightSites.push({x,y:y+86,z,target:{x:target.x,y:ground(target.x,target.z),z:target.z}});
   }
+  for(const p of ACCESS_LIGHTS){const y=ground(p.x,p.z);box(root,1.8,.7,1.8,concrete,p.x,y+.35,p.z);box(root,.3,12,.3,steel,p.x,y+6,p.z);box(root,3,.35,1.5,dark,p.x,y+12,p.z);box(root,2.8,.08,1.3,light,p.x,y+11.8,p.z);
+    floodlightSites.push({x:p.x,y:y+11.8,z:p.z,target:{x:p.x,y,z:p.z},intensity:2600,distance:85,angle:1.25});}
+  const parkingSign=sign('CREW GARAGE / 8 BUGGIES',30,4);parkingSign.position.set(PARKING.x,ground(PARKING.x,PARKING.z)+7,PARKING.z-24);parkingSign.rotation.y=Math.PI/2;root.add(parkingSign);
   // Four stable light slots avoid changing shader variants or rendering 24
   // extra shadow maps. Physical inverse-square falloff lights terrain and suits.
   const floodlights=Array.from({length:4},()=>{const l=new THREE.SpotLight(0xe4edff,210000,780,.95,.65,2);root.add(l,l.target);return l;});
@@ -118,7 +121,7 @@ export function createStadium(scene,ground,makeRock){
   const updateLights=viewer=>{
     if(Math.hypot(viewer.x-lightX,viewer.z-lightZ)<20)return;lightX=viewer.x;lightZ=viewer.z;
     const nearest=floodlightSites.map((s,i)=>({i,d:Math.hypot(s.x-viewer.x,s.z-viewer.z)})).sort((a,b)=>a.d-b.d).slice(0,4);
-    for(let i=0;i<floodlights.length;i++){const l=floodlights[i],p=floodlightSites[nearest[i].i];l.position.set(p.x,p.y,p.z);l.target.position.set(p.target.x,p.target.y,p.target.z);l.intensity=210000;}
+    for(let i=0;i<floodlights.length;i++){const l=floodlights[i],p=floodlightSites[nearest[i].i];l.position.set(p.x,p.y,p.z);l.target.position.set(p.target.x,p.target.y,p.target.z);l.intensity=p.intensity||210000;l.distance=p.distance||780;l.angle=p.angle||.95;}
   };
   const scoreboard=sign('CRATER RUN / CREW RACING',65,11);scoreboard.position.set(STADIUM.gate.x+35,ground(STADIUM.gate.x+35,28)+35,28);scoreboard.rotation.y=Math.PI/2;root.add(scoreboard);
   const trackFences=createTrackFences(root,ground,sign);
@@ -149,5 +152,5 @@ export function createStadium(scene,ground,makeRock){
   batch(root);
   const falling=ROCKFALLS.map(s=>{const rock=makeRock(s.radius,s.id%3);root.add(rock);const warning=mesh(root,new THREE.RingGeometry(s.radius+1,s.radius+1.5,28),new THREE.MeshBasicMaterial({color:0xcda15c,side:THREE.DoubleSide,transparent:true,opacity:.8}));warning.rotation.x=-Math.PI/2;return {rock,warning,site:s};});
   // Transparent barriers along the spectator front are represented by solid terrain-side walls.
-  return {root,rocksNear:(x,z,r=7)=>rockColliders.filter(q=>Math.hypot(x-q.x,z-q.z)<r+q.radius),rockSurface:(r,x,z)=>sampleRockHeightfield(r.field,r,x,z),crowdCount:crowdLocations.length,update(viewer,state){updateLights(viewer);for(const s of detailed)s.group.visible=Math.hypot(viewer.x-s.x,viewer.z-s.z)<75;for(const r of rockGroups)r.group.visible=Math.hypot(viewer.x-r.x,viewer.z-r.z)<1600;for(const f of falling){const p=rockfallPose(f.site,state?.raceTime||0,ground(f.site.x,f.site.z)),running=state?.phase==='racing';f.rock.visible=running&&p.active;f.rock.position.set(p.x,p.y,p.z);f.rock.rotation.set(p.y*.04,p.y*.03,0);f.warning.visible=running&&(p.warning||p.active);f.warning.position.set(p.x,ground(p.x,p.z)+.08,p.z);f.warning.material.opacity=.4+.4*Math.sin((state?.time||0)*8)**2;}},floor(x,z,base){const r=Math.hypot(x-STADIUM.x,z-STADIUM.z),a=Math.atan2(z-STADIUM.z,x-STADIUM.x);for(const s of sectors)if(s.i%4===0&&r>=1045&&r<=1142&&Math.abs(Math.atan2(Math.sin(a-s.aisle),Math.cos(a-s.aisle)))*r<1.9)return Math.max(base,s.y0+(s.y1-s.y0)*(r-1045)/97+.16);if(r<1067||r>1142||Math.abs(Math.atan2(Math.sin(a-Math.PI),Math.cos(a-Math.PI)))<.065)return base;const section=sectors.find(s=>Math.abs(Math.atan2(Math.sin(a-s.i/sections*TAU),Math.cos(a-s.i/sections*TAU)))<Math.PI/sections);if(!section)return base;return Math.max(base,section.base+Math.max(0,Math.floor((r-1067)/6))*3+1.5);},snapshot:()=>({sameScene:root.parent===scene,radius:STADIUM.radius,crowd:crowdLocations.length,stands:sectors.length,floodlightTowers:floodlightSites.length,activeLights:floodlights.length,slopeRocks:SLOPE_ROCKS.length,fenceSegments:trackFences.segments,fenceHeight:trackFences.height})};
+  return {root,rocksNear:(x,z,r=7)=>rockColliders.filter(q=>Math.hypot(x-q.x,z-q.z)<r+q.radius),rockSurface:(r,x,z)=>sampleRockHeightfield(r.field,r,x,z),crowdCount:crowdLocations.length,update(viewer,state){updateLights(viewer);for(const s of detailed)s.group.visible=Math.hypot(viewer.x-s.x,viewer.z-s.z)<75;for(const r of rockGroups)r.group.visible=Math.hypot(viewer.x-r.x,viewer.z-r.z)<1600;for(const f of falling){const p=rockfallPose(f.site,state?.raceTime||0,ground(f.site.x,f.site.z)),running=state?.phase==='racing';f.rock.visible=running&&p.active;f.rock.position.set(p.x,p.y,p.z);f.rock.rotation.set(p.y*.04,p.y*.03,0);f.warning.visible=running&&(p.warning||p.active);f.warning.position.set(p.x,ground(p.x,p.z)+.08,p.z);f.warning.material.opacity=.4+.4*Math.sin((state?.time||0)*8)**2;}},floor(x,z,base){const r=Math.hypot(x-STADIUM.x,z-STADIUM.z),a=Math.atan2(z-STADIUM.z,x-STADIUM.x);for(const s of sectors)if(s.i%4===0&&r>=1045&&r<=1142&&Math.abs(Math.atan2(Math.sin(a-s.aisle),Math.cos(a-s.aisle)))*r<1.9)return Math.max(base,s.y0+(s.y1-s.y0)*(r-1045)/97+.16);if(r<1067||r>1142||Math.abs(Math.atan2(Math.sin(a-Math.PI),Math.cos(a-Math.PI)))<.065)return base;const section=sectors.find(s=>Math.abs(Math.atan2(Math.sin(a-s.i/sections*TAU),Math.cos(a-s.i/sections*TAU)))<Math.PI/sections);if(!section)return base;return Math.max(base,section.base+Math.max(0,Math.floor((r-1067)/6))*3+1.5);},snapshot:()=>({sameScene:root.parent===scene,radius:STADIUM.radius,crowd:crowdLocations.length,stands:sectors.length,floodlightTowers:24,accessLights:ACCESS_LIGHTS.length,parking:{...PARKING},activeLights:floodlights.length,slopeRocks:SLOPE_ROCKS.length,fenceSegments:trackFences.segments,fenceHeight:trackFences.height})};
 }

@@ -1,0 +1,27 @@
+import {chromium} from 'playwright';
+import assert from 'node:assert/strict';
+import {paddockSpawn,toolbar,boot} from './stadium-fixture.mjs';
+const browser=await chromium.launch({channel:process.env.SELENE_BROWSER_CHANNEL||'chrome',headless:true,args:['--enable-webgl','--ignore-gpu-blocklist','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']});
+const context=await browser.newContext({viewport:{width:1100,height:740}}),errors=[];
+if(process.env.SELENE_LOCAL_SIGNAL==='1')await context.addInitScript({path:'checks/local-peer-fixture.js'});
+try{
+ const host=await context.newPage();host.on('pageerror',e=>errors.push(e.message));await paddockSpawn(host,0);await boot(host);await toolbar(host);await host.locator('#crew-button').click();await host.locator('#explorer-name').fill('Race host');await host.locator('#host-expedition').click();
+ await host.waitForFunction(()=>['connected','error'].includes(selene.snapshot().network.phase),null,{timeout:30000});assert.equal(await host.evaluate(()=>selene.snapshot().network.phase),'connected',await host.locator('#network-status').innerText());const invite=await host.locator('#invite-link').inputValue();await host.locator('#close-crew').click();
+ const guest=await context.newPage();guest.on('pageerror',e=>errors.push(e.message));await paddockSpawn(guest,1);await guest.goto(invite);await guest.waitForFunction(()=>window.selene?.snapshot().ready,null,{timeout:120000});await guest.locator('#begin').click();await guest.locator('#explorer-name').fill('Race guest');await guest.locator('#join-expedition').click();await guest.waitForFunction(()=>selene.snapshot().network.phase==='connected',null,{timeout:30000});await guest.locator('#close-crew').click();
+ await host.waitForFunction(()=>selene.snapshot().network.count===2);await guest.keyboard.press('Escape');
+ // Invited guests spawn beside the host. Find the nearest parked car by walking;
+ // no production teleport or boarding API is exposed to the check.
+ await guest.keyboard.press('Digit2');
+ for(let k=0;k<14;k++){const near=await guest.evaluate(()=>{const p=selene.snapshot().player;return seleneRace.snapshot().parked.map(c=>({...c,d:Math.hypot(c.x-p.x,c.z-p.z)})).sort((a,b)=>a.d-b.d)[0];});if(near.d<5.8)break;
+  const p=await guest.evaluate(()=>selene.snapshot().player),dx=near.x-p.x,dz=near.z-p.z;const key=Math.abs(dx)>Math.abs(dz)?(dx>0?'KeyD':'KeyA'):(dz>0?'KeyS':'KeyW');await guest.keyboard.down(key);await guest.waitForTimeout(800);await guest.keyboard.up(key);
+ }
+ await host.keyboard.press('KeyE');await host.waitForFunction(()=>seleneRace.snapshot().active);await guest.keyboard.press('KeyE');await guest.waitForFunction(()=>seleneRace.snapshot().active,null,{timeout:10000});
+ await host.waitForFunction(()=>seleneRace.snapshot().world.racers.length===2);await guest.waitForFunction(()=>seleneRace.snapshot().world.racers.length===2);
+ await host.keyboard.press('KeyY');await guest.keyboard.press('KeyY');await toolbar(host);await host.locator('#race-button').click();await host.waitForFunction(()=>!document.getElementById('race-start').disabled);await host.locator('#race-start').click();await host.locator('#race-close').click();
+ await guest.waitForFunction(()=>seleneRace.snapshot().world.phase==='countdown');await host.waitForFunction(()=>seleneRace.snapshot().world.phase==='racing');await guest.waitForFunction(()=>seleneRace.snapshot().world.phase==='racing');await guest.waitForFunction(()=>document.querySelectorAll('#race-times li').length===2);assert.ok((await guest.locator('#race-place').textContent()).endsWith(' / 2'));
+ await guest.keyboard.down('KeyW');await guest.waitForFunction(()=>seleneRace.snapshot().car.travel>35,null,{timeout:20000});await guest.keyboard.up('KeyW');await guest.keyboard.down('Space');
+ await host.waitForFunction(()=>seleneRace.snapshot().world.racers.find(p=>p.name==='Race guest')?.travel>30);await guest.waitForFunction(()=>seleneRace.snapshot().car.speed<.4);await guest.keyboard.up('Space');
+ await host.bringToFront();await host.waitForFunction(()=>{const s=seleneRace.snapshot(),p=s.world.racers.find(p=>p.name==='Race guest'),r=s.rendered.find(p=>p.name==='Race guest');return p?.speed<.4&&r&&Math.hypot(r.x-p.x,r.z-p.z)<1;});const hs=await host.evaluate(()=>seleneRace.snapshot()),gs=await guest.evaluate(()=>seleneRace.snapshot());const remote=hs.rendered.find(p=>p.name==='Race guest');assert.ok(Math.hypot(remote.x-gs.car.x,remote.z-gs.car.z)<5,JSON.stringify({remote,guest:gs.car,authoritative:hs.world.racers.find(p=>p.name==='Race guest')}));assert.ok(hs.stadium.sameScene&&gs.stadium.sameScene);
+ await guest.screenshot({path:'.cache/stadium-multiplayer.png'});await guest.keyboard.press('KeyE');await host.waitForFunction(()=>seleneRace.snapshot().world.racers.length===1);assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({passed:true,transport:'real WebRTC data channels',signalling:process.env.SELENE_LOCAL_SIGNAL==='1'?'local test fixture':'public PeerJS',checks:['physical boarding','two crew ready','host countdown','guest prediction','remote movement','same-world exit'],errors},null,2));
+}catch(error){for(const p of context.pages())console.log(JSON.stringify(await p.evaluate(()=>({player:window.selene?.snapshot().player,network:window.selene?.snapshot().network,race:window.seleneRace?.snapshot().car,error:document.querySelector('#error-message')?.textContent})),null,2));throw error;}finally{await browser.close();}
