@@ -57,7 +57,7 @@ export function moveVehicleWithRocks(p,oldX,oldZ,ground,rocks,surfaceAt,shape){
       p.x=lastX;p.z=lastZ;
       // Remove only velocity into the rock; retain tangential motion to slide.
       const rx=p.x-rock.x,rz=p.z-rock.z,d=Math.hypot(rx,rz)||1,nx=rx/d,nz=rz/d,v=p.vx*nx+p.vz*nz;
-      impact=Math.max(impact,-v);if(v<0){p.vx-=v*nx;p.vz-=v*nz;}
+      impact=Math.max(impact,-v);if(v<0){const rebound=Math.min(.5,Math.max(0,-v-.7)*.12);p.vx-=(v-rebound)*nx;p.vz-=(v-rebound)*nz;}
       return impact;
     }
     lastX=p.x;lastZ=p.z;

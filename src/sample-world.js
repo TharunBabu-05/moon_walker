@@ -2,7 +2,7 @@ import {GRAVITY,clamp} from './physics.js';
 import {throwSpeed,containsSample} from './ballistics.js';
 import {newMissionState,missionAt,recordMissionSample,SAMPLE_DEPOT} from './missions.js';
 
-export const SAMPLE_DURATIONS={pick:2.6,soil:5.8,store:1.35,throw:1.35,retrieve:1.2};
+export const SAMPLE_DURATIONS={pick:2.6,soil:5.8,store:1.35,throw:1.35,retrieve:1.2,deliver:2.4};
 export const RELEASE=.53,GRASP=.48;
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 export function samplePoint(p,x,y,z){const c=Math.cos(p.yaw),s=Math.sin(p.yaw);return {x:p.x+c*x+s*z,y:p.y+y,z:p.z-s*x+c*z};}
@@ -36,21 +36,36 @@ export class SampleWorld{
     if(!this.stones.has('landing-sample')&&!this.cells.has('starter')){this.cells.add('starter');this.add('landing-sample',.38,-.72,.07);}
   }
   person(id){if(!this.people.has(id))this.people.set(id,{held:null,bag:[],soil:0,action:null,hit:null,mission:newMissionState()});return this.people.get(id);}
+  seedSurvey(m){
+    // Ensure each active survey has reachable specimens, shared by all peers.
+    // Existing owned or thrown stones are never moved or duplicated.
+    let loose=[...this.stones.values()].filter(r=>r.rest&&!r.owner&&!r.reserved&&Math.hypot(r.x-m.x,r.z-m.z)<m.radius-1).length;
+    if(loose>=m.rocks+1)return;
+    const obstacles=this.obstacles();
+    for(let i=0;i<12&&loose<m.rocks+1;i++){
+      const id=`survey:${m.id}:${i}`;if(this.stones.has(id))continue;
+      const a=i*2.399963,r=1.5+(i%4)*.9,x=m.x+Math.cos(a)*r,z=m.z+Math.sin(a)*r,y=this.groundAt(x,z);
+      if(Math.abs(this.groundAt(x+.3,z)-this.groundAt(x-.3,z))>.2||Math.abs(this.groundAt(x,z+.3)-this.groundAt(x,z-.3))>.2||obstacles.some(b=>this.contains(b,x,y+.1,z,.4)))continue;
+      if(this.stones.size>=240){const spare=[...this.stones.values()].find(r=>r.rest&&!r.owner&&!r.reserved&&Math.hypot(r.x-x,r.z-z)>65);if(spare)this.stones.delete(spare.id);}
+      this.add(id,x,z,.065);if(this.stones.has(id))loose++;
+    }
+  }
   request(id,p,req){
-    if(!p||!req||!Object.hasOwn(SAMPLE_DURATIONS,req.type)&&req.type!=='mission')return 'Unknown sampling action.';
+    if(!p||!req||req.type==='deliver'||(!Object.hasOwn(SAMPLE_DURATIONS,req.type)&&req.type!=='mission'))return 'Unknown sampling action.';
     const person=this.person(id);
     if(person.action)return 'Finish your current action first.';
     if(p.riding||p.dismount||!p.grounded||p.speed>.18)return 'Stop on foot with both boots on the ground first.';
     if(req.type==='mission'){
       const state=person.mission,m=missionAt(state);if(!m)return 'All three field assignments are complete.';
-      if(state.stage==='available'){state.stage='collect';return null;}
+      if(state.stage==='available'){state.stage='collect';this.seedSurvey(m);return null;}
       if(state.stage!=='return')return 'Collect the requested samples inside the survey circle first.';
-      if(Math.hypot(p.x-SAMPLE_DEPOT.x,p.z-SAMPLE_DEPOT.z)>SAMPLE_DEPOT.radius)return 'Bring the samples to the research station depot.';
+      if(Math.hypot(p.x-SAMPLE_DEPOT.x,p.z-SAMPLE_DEPOT.z)>SAMPLE_DEPOT.radius)return 'Walk up to the sample receiving bench beside the station ramp.';
       const stored=state.rocks.filter(key=>person.bag.includes(key));
       if(stored.length<m.rocks||person.soil<m.soil)return 'Put the assignment stones back in your sample bag before delivery.';
-      for(const key of stored.slice(0,m.rocks)){this.stones.delete(key);person.bag.splice(person.bag.indexOf(key),1);}
-      person.soil-=m.soil;state.index++;state.completed++;state.stage=missionAt(state)?'available':'complete';state.rocks=[];state.soil=0;
-      this.event('mission',{id,name:m.name,x:p.x,y:p.y,z:p.z});return null;
+      if(person.held)return 'Bag the stone in your hand before handing over the samples.';
+      const bench=SAMPLE_DEPOT.bench;
+      person.action={type:'deliver',progress:0,start:this.time,origin:{x:p.x,y:p.y,z:p.z,yaw:Math.atan2(p.x-bench.x,p.z-bench.z)},target:{...bench,y:this.groundAt(bench.x,bench.z)+1.02}};
+      return null;
     }
     const type=req.type,a={type,progress:0,start:this.time,origin:{x:p.x,y:p.y,z:p.z,yaw:p.yaw},target:null};
     if(type==='pick'){
@@ -104,6 +119,7 @@ export class SampleWorld{
     }
     for(const {id,state:p} of entries){
       this.seed(p.x,p.z);const person=this.person(id),a=person.action;
+      if(person.mission.stage==='collect'&&Math.floor(this.time*2)!==Math.floor((this.time-dt)*2))this.seedSurvey(missionAt(person.mission));
       for(const r of this.stones.values())if(r.owner===id){r.x=p.x;r.y=p.y+1;r.z=p.z;}
       if(person.hit&&this.time-person.hit.time>1.1)person.hit=null;
       if(!a)continue;
@@ -118,6 +134,14 @@ export class SampleWorld{
         if(a.type==='store'&&r){person.bag.push(r.id);person.held=null;recordMissionSample(person.mission,'rock',r.sampleOrigin||a.origin,r.id);}
         if(a.type==='retrieve'&&r){person.bag.pop();person.held=r.id;}
         if(a.type==='soil'){person.soil++;recordMissionSample(person.mission,'soil',a.target);this.event('scoop',{...a.target});}
+        if(a.type==='deliver'){
+          const state=person.mission,m=missionAt(state),stored=state.rocks.filter(key=>person.bag.includes(key));
+          if(m&&state.stage==='return'&&stored.length>=m.rocks&&person.soil>=m.soil){
+            for(const key of stored.slice(0,m.rocks)){this.stones.delete(key);person.bag.splice(person.bag.indexOf(key),1);}
+            person.soil-=m.soil;state.index++;state.completed++;state.stage=missionAt(state)?'available':'complete';state.rocks=[];state.soil=0;
+            this.event('mission',{id,name:m.name,x:a.target.x,y:a.target.y,z:a.target.z});
+          }
+        }
         if(a.type==='throw'&&r){
           const at=samplePoint(a.origin,.34,1.52,-.56),d=a.direction;
           Object.assign(r,at,{vx:d.x*a.speed,vy:d.y*a.speed,vz:d.z*a.speed,owner:null,rest:false,thrower:id,born:this.time,spin:0});person.held=null;

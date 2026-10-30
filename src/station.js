@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {mergeGeometries} from '../vendor/utils/BufferGeometryUtils.js';
+import {SAMPLE_DEPOT} from './missions.js';
 
 // A fictional, metre-scale surface habitat informed by NASA habitat concepts.
 export function createStation(scene,baseGround,onDoor=()=>{}){
@@ -73,11 +74,30 @@ export function createStation(scene,baseGround,onDoor=()=>{}){
   strut([0,5.7,4],[0,7.3,4],.12);
   const dish=mesh(new THREE.SphereGeometry(1.25,40,20,0,Math.PI*2,0,.95),white,0,7.3,4);dish.rotation.z=.7;
   strut([0,7.3,4],[-1,9,4],.025);mesh(new THREE.CylinderGeometry(.12,.12,.18,16),gold,-1,9,4);
+  // A receiving counter beside the ramp makes sample delivery a visible place.
+  const bx=SAMPLE_DEPOT.bench.x-root.position.x,bz=SAMPLE_DEPOT.bench.z-root.position.z,by=baseGround(SAMPLE_DEPOT.bench.x,SAMPLE_DEPOT.bench.z)-root.position.y;
+  box(1.5,.10,.72,white,bx,by+.95,bz);
+  for(const dx of [-.62,.62])for(const dz of [-.25,.25]){
+    const foot=baseGround(SAMPLE_DEPOT.bench.x+dx,SAMPLE_DEPOT.bench.z+dz)-root.position.y;
+    box(.07,by+.9-foot,.07,metal,bx+dx,(by+.9+foot)/2,bz+dz);box(.2,.04,.2,dark,bx+dx,foot+.02,bz+dz);
+  }
+  box(1.12,.035,.48,dark,bx,by+1.02,bz);
+  for(const dx of [-.58,.58])box(.025,.07,.5,gold,bx+dx,by+1.05,bz);
+  for(const dz of [-.25,.25])box(1.18,.07,.025,gold,bx,by+1.05,bz+dz);
+  for(let i=0;i<4;i++){
+    mesh(new THREE.CylinderGeometry(.052,.052,.15,12),metal,bx-.35+i*.23,by+1.11,bz-.10);
+    box(.09,.02,.09,white,bx-.35+i*.23,by+1.2,bz-.10);
+  }
+  label('SAMPLE RECEIVING|HAND OVER BAGGED SAMPLES',2.3,.58,bx,by+2.05,bz-.36);
+  for(const dx of [-.8,.8])strut([bx+dx,by+.12,bz-.36],[bx+dx,by+2.36,bz-.36],.025);
+  solid(bx,bz,.76,.37,1.06,by);
+  const receivedPouches=[];let received=0;
+  for(let i=0;i<8;i++){const pouch=box(.16,.19,.10,gold,bx-.40+(i%4)*.26,by+1.13,bz+.08+Math.floor(i/4)*.14);pouch.userData.dynamic=true;pouch.visible=false;receivedPouches.push(pouch);}
   // Batch static opaque parts by material; sliding doors and glazing stay separate.
   root.updateMatrixWorld(true);const batches=new Map();
   for(const m of [...root.children])if(m.isMesh&&!m.userData.dynamic&&!m.material.transparent){m.updateMatrix();const g=m.geometry.clone().applyMatrix4(m.matrix);if(!batches.has(m.material))batches.set(m.material,[]);batches.get(m.material).push(g);root.remove(m);m.geometry.dispose();}
   for(const [material,parts] of batches){const merged=mergeGeometries(parts.map(g=>g.index?g.toNonIndexed():g));const m=new THREE.Mesh(merged,material);m.castShadow=m.receiveShadow=true;root.add(m);parts.forEach(g=>g.dispose());}
   const groundAt=(x,z)=>{const lx=x+25,lz=z-28;if(Math.abs(lx)<2.5&&lz>=-7&&lz<=7||Math.abs(lx)<1.15&&lz>7&&lz<=11)return floor;if(Math.abs(lx)<1.08&&lz>11&&lz<15)return root.position.y+.65*(15-lz)/4;return baseGround(x,z);};
   function update(dt,walkers){for(const d of doors){const near=walkers.some(p=>!p.riding&&Math.abs(p.x+25)<2&&Math.abs(p.z-(28+d.z))<3.2);if(near!==d.target){if(d.target!==undefined)onDoor({x:-25,y:root.position.y+1,z:28+d.z});d.target=near;}d.open=THREE.MathUtils.damp(d.open,near?1:0,7,dt);d.mesh.position.y=1.94+d.open*2.8;d.body.state.y=root.position.y+.65+d.open*2.8;}}
-  return {root,groundAt,colliders,update,floor,entrance:{x:-25,z:44},snapshot:()=>({floor,doors:doors.map(d=>d.open),position:root.position.toArray()})};
+  return {root,groundAt,colliders,update,floor,receiveSample(){receivedPouches[received++%receivedPouches.length].visible=true;},resetSamples(){received=0;for(const pouch of receivedPouches)pouch.visible=false;},entrance:{x:-25,z:44},snapshot:()=>({floor,doors:doors.map(d=>d.open),position:root.position.toArray(),sampleBench:{...SAMPLE_DEPOT.bench,y:root.position.y+by+1.02,received}})};
 }

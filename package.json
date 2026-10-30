@@ -17,6 +17,8 @@
     "test": "node --test checks/physics.test.mjs checks/expedition.test.mjs checks/upgrade.test.mjs checks/navigation.test.mjs checks/fieldwork.test.mjs",
     "test:browser": "node checks/browser.mjs",
     "test:fieldwork": "node checks/fieldwork-browser.mjs",
+    "test:playtest-feedback": "node checks/playtest-feedback-browser.mjs",
+    "test:playtest-multiplayer": "node checks/playtest-feedback-multiplayer.mjs",
     "test:locomotion": "node checks/locomotion-browser.mjs",
     "test:ground-recovery": "node checks/ground-recovery-browser.mjs",
     "test:suspension": "node checks/suspension-browser.mjs",

@@ -61,7 +61,7 @@ export function createAudio(){
   function sample(action){
     if(!action){actionKey='';actionMask=0;return;}
     const key=action.type+':'+action.start;if(key!==actionKey){actionKey=key;actionMask=0;}
-    const cues={pick:[[.12,'suit'],[.48,'pick']],store:[[.15,'suit'],[.72,'bag']],retrieve:[[.18,'bag'],[.72,'pick']],soil:[[.12,'shovel'],[.44,'scoop'],[.72,'pour']],throw:[[.12,'suit'],[.53,'throw']]};
+    const cues={pick:[[.12,'suit'],[.48,'pick']],store:[[.15,'suit'],[.72,'bag']],retrieve:[[.18,'bag'],[.72,'pick']],soil:[[.12,'shovel'],[.44,'scoop'],[.72,'pour']],throw:[[.12,'suit'],[.53,'throw']],deliver:[[.2,'bag'],[.72,'pick']]};
     (cues[action.type]||[]).forEach(([at,type],i)=>{if(action.progress>=at&&!(actionMask&(1<<i))){actionMask|=1<<i;effect(type);}});
   }
   function event(e,listener,heading){

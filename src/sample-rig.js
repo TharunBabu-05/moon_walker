@@ -28,6 +28,7 @@ export function createSampleRig(avatar,makeRock){
   const glove=new THREE.Group();glove.position.set(0,-.36,-.015);avatar.arms.find(a=>a.side===1).elbow.add(glove);
   const attachment=new THREE.Group();glove.add(attachment);attachment.add(shovel);
   let stone=makeRock(.065,0),stoneKey='';attachment.add(stone);stone.visible=false;
+  const deliveryPouch=mesh(attachment,new THREE.BoxGeometry(.16,.19,.08),fabric,[0,-.015,-.035]);deliveryPouch.visible=false;
   // Fingers wrap around the sample/tool instead of leaving a rigid open mitten.
   const fingers=[];for(let i=0;i<4;i++){const finger=mesh(glove,new THREE.CapsuleGeometry(.012,.045,4,8),fabric,[-.038+i*.024,-.025,-.045]);fingers.push(finger);}
   const grains=new THREE.Points(new THREE.BufferGeometry(),new THREE.PointsMaterial({color:0xa1a19a,size:.012}));const grainPositions=new Float32Array(24*3);grains.geometry.setAttribute('position',new THREE.BufferAttribute(grainPositions,3));avatar.root.add(grains);grains.visible=false;
@@ -36,7 +37,7 @@ export function createSampleRig(avatar,makeRock){
     const a=person?.action,t=a?Math.min(1,a.progress):0,held=!!person?.held,active=!!a;
     const specimen=person?.specimen;
     if(specimen&&stoneKey!==specimen.id){stone.removeFromParent();stone=makeRock(specimen.radius,specimen.variant);attachment.add(stone);stoneKey=specimen.id;}
-    stone.visible=held;shovel.visible=true;shovel.rotation.set(0,0,0);load.visible=false;grains.visible=false;
+    stone.visible=held;deliveryPouch.visible=a?.type==='deliver'&&t>.2&&t<.72;shovel.visible=true;shovel.rotation.set(0,0,0);load.visible=false;grains.visible=false;
     // Pocket shovel is visible when holstered; it travels with the right glove during sampling.
     if(a?.type==='soil'&&t>.12&&t<.94){if(shovel.parent!==attachment)attachment.add(shovel);shovel.position.set(0,0,0);}
     else{if(shovel.parent!==pocket)pocket.add(shovel);shovel.position.set(0,.11,-.02);}
@@ -64,6 +65,11 @@ export function createSampleRig(avatar,makeRock){
       }else if(a.type==='store'||a.type==='retrieve'){
         right=curve([[0,a.type==='store'?idle:[.35,.8,-.08]],[.5,bagHand],[.74,bagHand],[1,a.type==='retrieve'?idle:[.35,.8,-.08]]],t);
         left=v(a.type==='store'?[-.28,1.02,-.19]:[.46,1.03,-.07]);tilt=-Math.sin(t*Math.PI)*.08;
+      }else if(a.type==='deliver'){
+        const target=localTarget.clone();target.y+=.1;
+        right=curve([[0,[.35,.8,-.08]],[.2,bagHand],[.34,[.30,1.12,-.26]],[.62,target.toArray()],[.72,target.toArray()],[1,[.35,.8,-.08]]],t);
+        left=curve([[0,[-.35,.84,-.05]],[.2,bagHand],[.38,[-.3,1.04,-.18]],[1,[-.35,.84,-.05]]],t);
+        tilt=-.12*Math.sin(t*Math.PI);
       }else if(a.type==='throw'){
         right=curve([[0,idle],[.32,[.43,1.77,.30]],[RELEASE,[.34,1.52,-.56]],[.72,[.20,1.25,-.59]],[1,[.35,.8,-.08]]],t);
         left=curve([[0,[-.35,.84,-.05]],[.3,[-.42,1.2,-.33]],[.7,[-.48,1.06,.06]],[1,[-.35,.84,-.05]]],t);

@@ -2,7 +2,7 @@ import {reconcileContacts} from './contacts.js';
 export const MAX_CREW=8;
 // Changing the wire contract requires a fresh room so an older client cannot
 // silently omit pose fields that affect shared animation.
-const PROTOCOL=13;
+const PROTOCOL=14;
 const PREFIX=`selene-expedition-${PROTOCOL}-`;
 const numeric=['x','y','z','vx','vy','vz','yaw','speed','distance'];
 
@@ -22,9 +22,11 @@ export function sanitizeState(value){
     }
     if(Math.abs(r.x)>11020||Math.abs(r.z)>11020||Math.abs(r.y)>5000||r.speed>40)return null;
     r.grounded=!!value.rover.grounded;p.rover=r;
+    r.impact=clampImpact(value.rover.impact);
   }
   return p;
 }
+const clampImpact=value=>Number.isFinite(value)?Math.max(0,Math.min(1,value)):0;
 export const cleanName=value=>String(value||'Explorer').replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,20)||'Explorer';
 
 let library;

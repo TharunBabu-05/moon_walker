@@ -3,7 +3,7 @@ const copy=s=>({...s,rover:s.rover?{...s.rover}:undefined});
 const mix=(a,b,t)=>a+(b-a)*t;
 function blend(a,b,t,seconds){
   const out={...a};
-  for(const key of ['x','y','z','vx','vy','vz','speed','distance','steering','pitch','roll','wheelTravel']){
+  for(const key of ['x','y','z','vx','vy','vz','speed','distance','steering','pitch','roll','wheelTravel','impact']){
     if(Number.isFinite(a[key])&&Number.isFinite(b[key]))out[key]=mix(a[key],b[key],t);
   }
   // Hermite positions preserve the velocity across packet boundaries.

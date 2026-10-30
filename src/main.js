@@ -17,7 +17,7 @@ import {createSampling} from './sampling.js';
 import {createSampleRig} from './sample-rig.js';
 import {createWorkerClient} from './worker-client.js';
 import {createThrowAim} from './throw-aim.js';
-import {MISSIONS,missionAt,SAMPLE_DEPOT} from './missions.js';
+import {MISSIONS,missionAt,missionGuidance,SAMPLE_DEPOT} from './missions.js';
 import {createHUDLayout} from './hud-layout.js';
 import {createAudio} from './audio.js';
 import {createRacing} from './racing.js';
@@ -164,7 +164,7 @@ async function start(){
     },onNotice:text=>{pendingSampleUntil=0;toast(text);},
     onSampleRequest:(id,state,request)=>sampling?.request(id,state,request),
     onSampleWorld:data=>{sampling?.accept(data);if(sampling?.busy())pendingSampleUntil=0;},
-    onSampleReset:()=>{sampling?.reset();pendingSampleUntil=0;},
+    onSampleReset:()=>{sampling?.reset();station.resetSamples();pendingSampleUntil=0;},
     onRaceRequest:(id,request,name)=>race?.request(id,request,name),
     onRaceWorld:data=>race?.accept(data),
     onRaceReset:()=>race?.reset(),
@@ -173,7 +173,7 @@ async function start(){
       if(riding&&!dismount)syncDriver();
     }
   });
-  sampling=createSampling({scene,groundAt,makeRock:terrain.sampleMesh,network:expedition,onNotice:toast,onEvent:e=>{if(started&&mode!=='orbit')sound.event(e,player,mode==='first'?yaw:followYaw);},onDust:p=>terrain.impactDust(new THREE.Vector3(p.x,p.y,p.z)),
+  sampling=createSampling({scene,groundAt,makeRock:terrain.sampleMesh,network:expedition,onNotice:toast,onEvent:e=>{if(e.type==='mission')station.receiveSample();if(started&&mode!=='orbit')sound.event(e,player,mode==='first'?yaw:followYaw);},onDust:p=>terrain.impactDust(new THREE.Vector3(p.x,p.y,p.z)),
     obstacles:()=>[...terrain.colliders,...station.colliders,...flags.colliders,...expedition.sampleEntries().filter(e=>e.state.rover).map(e=>roverBody(e.state.rover,e.id,false))]});
   const throwAim=createThrowAim(scene,groundAt,()=>[...terrain.colliders,...station.colliders,...flags.colliders,roverBody(roverState,'self',false),...[...remotes].flatMap(([id,r])=>bodiesFor(id,r.current))]);
   let aimView=null,throwPending=false;
@@ -249,22 +249,30 @@ async function start(){
   $('route-clear').onclick=()=>setWaypoint(null);
   let missionRouteKey='',missionUIKey='';
   const missionMarker=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,2.6,8),new THREE.MeshBasicMaterial({color:0xe9c78e,transparent:true,opacity:.8}));scene.add(missionMarker);missionMarker.visible=false;
+  const surveyPositions=new Float32Array(97*3),surveyGeometry=new THREE.BufferGeometry();surveyGeometry.setAttribute('position',new THREE.BufferAttribute(surveyPositions,3));
+  const surveyBoundary=new THREE.Line(surveyGeometry,new THREE.LineBasicMaterial({color:0xe9c78e,transparent:true,opacity:.72}));surveyBoundary.frustumCulled=false;surveyBoundary.visible=false;scene.add(surveyBoundary);let outlinedSurvey=-1;
   function routeMission(){const state=sampling.person(expedition.identity())?.mission,m=missionAt(state);if(!m||!state||!['collect','return'].includes(state.stage))return;setWaypoint(state.stage==='return'?SAMPLE_DEPOT:{x:m.x,z:m.z,label:m.name+' survey area'});}
-  $('mission-action').onclick=()=>{sampleAction('mission');};$('mission-route').onclick=routeMission;
+  $('mission-action').onclick=()=>{sampleAction('mission');};$('mission-route').onclick=routeMission;$('mission-map').onclick=()=>$('atlas-button').click();
   function updateMission(){
     const state=sampling.person(expedition.identity())?.mission,m=missionAt(state);$('mission-card').hidden=!started||mode==='orbit';if(!state)return;
+    const guidance=missionGuidance(state,player,{held:!!sampling.held(),nearest:!!sampling.nearest(player),busy:sampling.busy()});
+    if($('mission-guidance').textContent!==guidance)$('mission-guidance').textContent=guidance;
+    $('mission-card').classList.toggle('first-assignment',state.index===0&&state.stage==='available');
+    $('mission-action').disabled=sampling.busy()||!!pendingSampleUntil||riding||race.active()||player.speed>.18||!player.grounded||state.stage==='return'&&Math.hypot(player.x-SAMPLE_DEPOT.x,player.z-SAMPLE_DEPOT.z)>SAMPLE_DEPOT.radius;
+    surveyBoundary.visible=started&&mode!=='orbit'&&state.stage==='collect';
+    if(m&&surveyBoundary.visible&&outlinedSurvey!==state.index){outlinedSurvey=state.index;for(let i=0;i<=96;i++){const a=i/96*Math.PI*2,x=m.x+Math.cos(a)*m.radius,z=m.z+Math.sin(a)*m.radius;surveyPositions.set([x,groundAt(x,z)+.045,z],i*3);}surveyGeometry.attributes.position.needsUpdate=true;}
     const active=['collect','return'].includes(state.stage),routeKey=state.index+':'+state.stage;
     if(active&&routeKey!==missionRouteKey){missionRouteKey=routeKey;routeMission();}else if(!active)missionRouteKey='';
-    missionMarker.visible=active&&mode!=='orbit';if(active){const point=state.stage==='return'?SAMPLE_DEPOT:m;missionMarker.position.set(point.x,landscape.groundAt(point.x,point.z)+1.3,point.z);}
+    missionMarker.visible=state.stage==='collect'&&mode!=='orbit';if(missionMarker.visible)missionMarker.position.set(m.x,landscape.groundAt(m.x,m.z)+1.3,m.z);
     const uiKey=routeKey+':'+state.rocks.length+':'+state.soil;if(uiKey===missionUIKey)return;missionUIKey=uiKey;
     $('mission-title').textContent=m?m.name:'Field campaign complete';$('mission-number').textContent=state.completed+' / '+MISSIONS.length+' COMPLETE';
-    $('mission-description').textContent=!m?'All three assignments delivered to the depot. Keep exploring with your crew.':state.stage==='available'?m.brief:state.stage==='return'?'Return to the sample depot outside the research station. Bag your stones, then deliver.':'Collect inside '+m.radius+' m of the gold survey marker. F picks up a stone; B bags it; G scoops soil.';
+    $('mission-description').textContent=!m?'All three assignments handed over at the receiving bench. Keep exploring with your crew.':state.stage==='available'?m.brief:state.stage==='return'?'Bring your bagged samples to the receiving tray beside the station ramp.':'Collect within the outlined '+m.radius+' m survey circle. The gold route leads to its centre.';
     $('mission-progress').textContent=m?Math.min(state.rocks.length,m.rocks)+' / '+m.rocks+' ROCKS · '+Math.min(state.soil,m.soil)+' / '+m.soil+' SOIL':'';
-    $('mission-action').hidden=!m||state.stage==='collect';$('mission-action').textContent=state.stage==='return'?'Deliver samples':'Accept assignment';$('mission-route').hidden=!active;
+    $('mission-action').hidden=!m||state.stage==='collect';$('mission-action').textContent=state.stage==='return'?'Hand over samples':'Accept assignment';$('mission-route').hidden=!active;
   }
 
   const landmarks=[{x:0,z:0,label:'Landing point',short:'LANDING'},{...station.entrance,label:'Research station entrance',short:'STATION'},...flags.exhibits.map((f,i)=>({x:f.x+.5,z:f.z+4,label:f.label,short:(i<6?'A'+[11,12,14,15,16,17][i]:'CE'+(i===6?5:6))+' FLAG',flag:true}))];
-  landmarks.push({...ARENA.gate,label:'Crater stadium entrance',short:'STADIUM'});
+  landmarks.push({...ARENA.gate,label:'Crater stadium entrance',short:'STADIUM'},{...SAMPLE_DEPOT,short:'SAMPLES'});
   const atlas=createAtlas({getState:()=>({player:{...player},navigation}),heightAt:landscape.heightAt,landmarks,onPin:setWaypoint,onOpen(){if(document.pointerLockElement)document.exitPointerLock();keys.clear();},onOrbit(site){if(!started)$('begin').click();setMode('orbit');universe.focusSite(site);$('orbit-site').textContent=`${site.name} · ${site.mission}`;},onStation(){
     if(!started)$('begin').click();
     riding=false;dismount=null;keys.clear();jumpRequested=false;const {x,z}=station.entrance;
@@ -354,7 +362,7 @@ async function start(){
     if(mode==='orbit'){universe.preset('moon');toast('Scroll to zoom out. Earth + Moon frames both worlds.');}
     else if(mode==='follow'&&!temporary)toast('Drag to orbit your astronaut. Space to jump.');
   }
-  $('begin').addEventListener('click',()=>{if(!ready)return;sound.unlock();started=true;$('welcome').hidden=true;$('hud').hidden=false;$('views').hidden=false;canvas.focus();controls();if(invitedRoom)openCrew();else requestLook();});
+  $('begin').addEventListener('click',()=>{if(!ready)return;sound.unlock();started=true;$('welcome').hidden=true;$('hud').hidden=false;$('views').hidden=false;canvas.focus();controls();if(invitedRoom)openCrew();else{requestLook();toast('Start with PANELS → Field assignment. Accept your first survey; M opens your map. Esc releases the mouse.');}});
   document.querySelector('.brand').addEventListener('click',event=>{event.preventDefault();if(started){if(mode!=='first')setMode('first');toast('1 First person · 2 Astronaut · 3 Orbit');}});
   document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>setMode(button.dataset.view)));
   $('resume').addEventListener('click',requestLook);
@@ -431,7 +439,7 @@ async function start(){
       camera.rotation.order='YXZ';camera.rotation.set(pitch,yaw,0,'YXZ');
       const task=sampling.person(expedition.identity())?.action;
       if(task&&task.type!=='throw'){
-        const at=task.target&&task.progress<.57?new THREE.Vector3(task.target.x,task.target.y,task.target.z):astronaut.root.localToWorld(new THREE.Vector3(0,1.02,-.32));
+        const at=task.target&&(task.progress<.57||task.type==='deliver')?new THREE.Vector3(task.target.x,task.target.y,task.target.z):astronaut.root.localToWorld(new THREE.Vector3(0,1.02,-.32));
         const focus=-Math.atan2(camera.position.y-at.y,Math.max(.12,Math.hypot(camera.position.x-at.x,camera.position.z-at.z)));
         const blend=THREE.MathUtils.smoothstep(task.progress,0,.15)*(1-THREE.MathUtils.smoothstep(task.progress,.87,1));
         camera.rotation.x=pitch+(clamp(focus,-1.38,.5)-pitch)*blend;
@@ -469,7 +477,7 @@ async function start(){
     const samples=sampling.person(expedition.identity()),action=samples?.action,near=sampling.nearest(player),stationary=player.grounded&&player.speed<.18;
     $('sample-card').hidden=orbit||riding;
     $('sample-count').textContent=`ROCKS ${samples?.bag.length||0}/12  /  SOIL ${samples?.soil||0}/12`;
-    $('sample-status').textContent=action?({pick:'Crouch, reach, grip, stand',soil:'Draw shovel, scoop, pour, stow',store:'Storing stone in sample bag',throw:'Wind up, release, follow through',retrieve:'Taking a stone from the bag'}[action.type]):samples?.held?'Stone in right hand. Aim with the view, then throw or bag it.':near?'Loose stone within reach. F to pick it up.':'Find small loose stones, or G to scoop lunar soil.';
+    $('sample-status').textContent=action?({pick:'Crouch, reach, grip, stand',soil:'Draw shovel, scoop, pour, stow',store:'Storing stone in sample bag',throw:'Wind up, release, follow through',retrieve:'Taking a stone from the bag',deliver:'Placing the sample pouch in the receiving tray'}[action.type]):samples?.held?'Stone in right hand. Aim with the view, then throw or bag it.':near?'Loose stone within reach. F to pick it up.':'Find small loose stones, or G to scoop lunar soil.';
     $('sample-progress').value=action?.progress||0;$('sample-progress').hidden=!action;
     $('sample-pick').disabled=!!action||!!samples?.held||!near||!stationary;
     $('sample-soil').disabled=!!action||!!samples?.held||!stationary||(samples?.soil||0)>=12;
@@ -499,7 +507,7 @@ async function start(){
   // Reflect the actual terrain and sun in the helmet's gold visor.
   updateCamera(.016);
   const cubeTarget=new THREE.WebGLCubeRenderTarget(128,{generateMipmaps:true,minFilter:THREE.LinearMipmapLinearFilter});const cube=new THREE.CubeCamera(.05,30000,cubeTarget);cube.position.set(player.x,player.y+1.8,player.z);cube.update(renderer,scene);astronaut.materials.glass.envMap=cubeTarget.texture;astronaut.materials.glass.envMapIntensity=.8;astronaut.materials.glassTwo.envMap=cubeTarget.texture;astronaut.materials.glassTwo.envMapIntensity=1.2;astronaut.materials.gold.envMap=cubeTarget.texture;
-  let lastBound=-10;
+  let lastBound=-10,lastVehicleImpact=-10;
   function animate(){
     requestAnimationFrame(animate);
     const dt=Math.min(clock.getDelta(),.08);expedition.update(performance.now()/1000);if(document.hidden)return;
@@ -523,6 +531,7 @@ async function start(){
           const oldYaw=roverState.yaw,oldX=player.x,oldZ=player.z,oldSpeed=roverState.speed;
           stepRover(roverState,{throttle:inputZ,steer:-inputX,brake:keys.has('Space'),fast},FIXED_STEP,landscape.groundAt,vehicleRocks(roverState.x,roverState.z,7),vehicleSurface);
           if(oldSpeed-roverState.speed>1)sound.effect('collision',Math.min(1.5,(oldSpeed-roverState.speed)/3));
+          if(roverState.rockImpact>.9&&elapsed-lastVehicleImpact>.4){lastVehicleImpact=elapsed;const x=roverState.x-Math.sin(roverState.yaw)*1.3,z=roverState.z-Math.cos(roverState.yaw)*1.3;terrain.impactDust(new THREE.Vector3(x,landscape.groundAt(x,z),z));}
           const turn=angleDelta(oldYaw,roverState.yaw);yaw+=turn;followYaw+=turn;
           syncDriver();localContacts();
           player.distance+=Math.hypot(player.x-oldX,player.z-oldZ);

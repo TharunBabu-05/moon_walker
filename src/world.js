@@ -39,7 +39,7 @@ export function resolveObstacles(body, obstacles, radius=.32, surfaceAt=null,blo
 }
 
 export function createRoverState(groundAt,x=3,z=2) {
-  return {x,z,y:groundAt(x,z),vx:0,vz:0,vy:0,yaw:-.35,speed:0,steering:0,pitch:0,roll:0,wheelTravel:0,grounded:true};
+  return {x,z,y:groundAt(x,z),vx:0,vz:0,vy:0,yaw:-.35,speed:0,steering:0,pitch:0,roll:0,wheelTravel:0,grounded:true,impact:0};
 }
 
 // The rendered chassis underside is 0.425 m above the wheel contact datum.
@@ -87,16 +87,20 @@ export function stepRover(p,input,dt,groundAt,obstacles=[],surfaceAt=null) {
   const oldY=p.y,oldX=p.x,oldZ=p.z;
   p.x=clamp(p.x+p.vx*dt,-SURFACE_LIMIT+3,SURFACE_LIMIT-3);
   p.z=clamp(p.z+p.vz*dt,-SURFACE_LIMIT+3,SURFACE_LIMIT-3);
-  moveVehicleWithRocks(p,oldX,oldZ,groundAt,obstacles,surfaceAt,ROVER_CONTACT);
-  resolveTrackFence(p,oldX,oldZ,groundAt,1.12,.32,2.7);
+  const rockImpact=moveVehicleWithRocks(p,oldX,oldZ,groundAt,obstacles,surfaceAt,ROVER_CONTACT);
+  const impact=Math.max(rockImpact,resolveTrackFence(p,oldX,oldZ,groundAt,1.12,.32,2.7));
+  p.impact=Math.max(damp(p.impact||0,0,10,dt),clamp((impact-.6)/5,0,1));p.rockImpact=rockImpact;
   const fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),rx=Math.cos(p.yaw),rz=-Math.sin(p.yaw);
   const corners=[];
   for(const side of [-1,1])for(const end of [-1,1])corners.push(roverWheelHeight(p.x+rx*1.01*side+fx*1.05*end,p.z+rz*1.01*side+fz*1.05*end,groundAt,obstacles,surfaceAt));
   const front=(corners[1]+corners[3])/2,back=(corners[0]+corners[2])/2,left=(corners[0]+corners[1])/2,right=(corners[2]+corners[3])/2;
   const floor=Math.max(groundAt(p.x,p.z),corners.reduce((a,b)=>a+b,0)/4,Math.max(...corners)-.26);
-  if (p.grounded && oldY-floor>.035) {p.grounded=false;p.vy=0;}
+  // Contact carries the vertical component of uphill motion. At a crest the
+  // ground can no longer pull the chassis down: retain that take-off velocity.
+  if (p.grounded && oldY+(p.vy||0)*dt-.5*GRAVITY*dt*dt>floor+.0001&&Math.hypot(p.vx,p.vz)>.3) p.grounded=false;
   if (!p.grounded) {p.vy-=GRAVITY*dt;p.y+=p.vy*dt;}
-  if (p.y<=floor || p.grounded) {p.y=floor;p.vy=0;p.grounded=true;}
+  if (p.grounded) {p.y=floor;p.vy=damp(p.vy||0,clamp((floor-oldY)/dt,-6,6),18,dt);}
+  else if(p.y<=floor){p.impact=Math.max(p.impact,clamp((-p.vy-.6)/4,0,1));p.y=floor;p.vy=0;p.grounded=true;}
   p.pitch=damp(p.pitch,clamp(Math.atan2(front-back,2.1),-.65,.65),8,dt);
   p.roll=damp(p.roll,clamp(Math.atan2(right-left,1.9),-.5,.5),8,dt);
   p.speed=Math.hypot(p.vx,p.vz);p.wheelTravel+=speed*dt;

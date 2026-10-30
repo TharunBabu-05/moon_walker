@@ -10,8 +10,29 @@ import {createRockQuery,rockCell} from '../src/rock-layout.js';
 import {buildRockHeightfield,sampleRockHeightfield} from '../src/rock-heightfield.js';
 import {SLOPE_ROCKS,slopeRockHeight} from '../src/stadium-layout.js';
 import {createLandscape} from '../src/landscape.js';
+import {createRoverState,stepRover} from '../src/world.js';
 const flat=()=>0,environment=rocks=>({nearby:()=>rocks});
 const driver=(yaw=0)=>Object.assign(newRacer('p',0,0,'P',flat),{x:0,z:8,yaw});
+
+test('exploration buggy carries uphill velocity into lunar flight and lands after a crest',()=>{
+ const ground=(_x,z)=>2*Math.exp(-z*z/32),p=createRoverState(ground,0,10);Object.assign(p,{yaw:0,vz:-5,speed:5});
+ let takeoff=null,airborne=0,clearance=0;
+ for(let i=0;i<1200;i++){
+  const was=p.grounded;stepRover(p,{throttle:1},1/120,ground);
+  if(was&&!p.grounded&&!takeoff)takeoff={vy:p.vy,z:p.z};
+  if(!p.grounded){airborne++;clearance=Math.max(clearance,p.y-ground(p.x,p.z));}
+  assert.ok(p.y>=ground(p.x,p.z)-1e-8);
+ }
+ assert.ok(takeoff?.vy>.4,'uphill velocity survives take-off');assert.ok(airborne>60&&clearance>.2);assert.ok(p.grounded);
+});
+
+test('a solid rock gives a bounded rebound and recovery without turning small stones into walls',()=>{
+ const p=createRoverState(flat,0,5);Object.assign(p,{yaw:0,vz:-5,speed:5});let impact=0,rebound=0;
+ const rock={x:0,z:0,radius:.7,bottom:0,top:1.3};
+ for(let i=0;i<180;i++){stepRover(p,{throttle:0},1/120,flat,[rock]);impact=Math.max(impact,p.impact);rebound=Math.max(rebound,p.vz);}
+ assert.ok(p.z>1.3);assert.ok(impact>.3&&impact<=1);assert.ok(rebound>.1&&rebound<=.51);
+ const stop=p.z;for(let i=0;i<200;i++)stepRover(p,{throttle:-1},1/120,flat,[rock]);assert.ok(p.z>stop+1);
+});
 
 test('race chassis clears low central stones forward and in reverse at different headings',()=>{
  for(const yaw of [0,.72,2.1])for(const throttle of [-1,1]){

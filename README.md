@@ -59,7 +59,7 @@ Approach your buggy and press **E** to board. Drive in first person or orbit the
 | ![Player driving a lunar buggy across the highlands](docs/media/buggy-expedition.webp) | ![Development view of the buggy with connected suspension arms and wheel assemblies](docs/media/suspension.webp) |
 | Each crew member has their own exploration buggy. | Wishbones, steering knuckles, coil springs and telescoping dampers connect the wheels to the chassis. |
 
-Tyres respond to small bumps while low stones between the wheel tracks can pass beneath the chassis. Taller rocks block the vehicle. Ground contact, suspension travel, low traction and airborne lunar gravity shape the ride. These are tuned game physics, not a full engineering vehicle simulation.
+Tyres respond to small bumps while low stones between the wheel tracks can pass beneath the chassis. Taller rocks block the vehicle with a small rebound, chassis response and impact dust. Tilted and steered tyres follow slope contact, and the buggy carries uphill momentum into lunar flight when cresting a ridge. These are tuned game physics, not a full engineering vehicle simulation.
 
 <details>
 <summary><strong>Another view from the expedition</strong></summary>
@@ -83,7 +83,7 @@ Each bag holds **12 samples**. Sampling preserves your follow-camera angle, so y
 
 **Hold T to aim; release to throw.** A temporary first-person view shows the predicted arc and landing point as throw power builds. After release, your previous camera view returns. **Esc** cancels aiming. Stones spin, bounce, slow on contact and produce impact dust; hitting another explorer triggers a short suit-recoil animation.
 
-**Field assignments:** accept one of three sequential survey tasks, follow the gold marker and mini-map route, collect the required rocks and soil inside the survey circle, then return to the depot outside the research station to deliver them. The mission panel tracks your progress.
+**Field assignments:** the first-assignment prompt points you to the mission panel and map. Accept one of three survey tasks, follow the gold route into the outlined survey circle, then follow the pickup, bagging and soil-scooping prompts. Return to the labelled **sample receiving bench beside the station ramp**. Stand within reach and choose **Hand over samples**; the astronaut places a pouch in the tray and the mission advances after the hand-over action. Sample bags remain yours if the action is interrupted before placement.
 
 ## Navigate the Moon and its history
 

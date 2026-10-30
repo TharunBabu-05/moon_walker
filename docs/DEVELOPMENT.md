@@ -46,6 +46,8 @@ npm test
 | --- | --- |
 | `npm run test:browser` | General exploration and camera checks |
 | `npm run test:fieldwork` | Collection, soil, throws and assignments |
+| `npm run test:playtest-feedback` | First-survey guidance, map access, sampling and receiving-bench handover |
+| `npm run test:playtest-multiplayer` | Two-peer sample handover through real WebRTC with local signalling and test-only completed inventories |
 | `npm run test:locomotion` | Camera preservation and movement regressions |
 | `npm run test:ground-recovery` | Terrain penetration and recovery |
 | `npm run test:suspension` | Connected wheel assemblies and suspension travel |
@@ -69,7 +71,7 @@ The generated 22 km field uses a continuous terrain floor. Movement and subseque
 
 Walkers use triangle queries for reachable rock-top contact. Vehicles use cached height fields sampled from the photographed rock meshes, separate tyre paths, chassis clearance and swept movement. Small stones can pass beneath the body between tyres, while taller obstructions remain solid. Rock placement is deterministic across views and independent of rendered terrain chunks.
 
-The exploration buggy has 0.40 m nominal underbody clearance and a 0.22 m tyre-step limit. Race vehicles use their own dimensions. Wishbones constrain visible hub travel; springs, dampers and travel stops smooth wheel movement. This is a custom game simulation, not a full multibody solver: tyre deformation, deformable soil, chassis damage deformation and engineering-grade rollover dynamics are not simulated.
+The exploration buggy has 0.40 m nominal underbody clearance and a 0.22 m tyre-step limit. Race vehicles use their own dimensions. Wishbones constrain visible hub travel; springs, dampers and travel stops smooth wheel movement. Tyre support accounts for the cylinder radius, tread width, steering and slope normal. Grounded vertical velocity follows the terrain; it is retained when a crest cannot sustain contact. Solid rock impacts have bounded restitution and a damped visual chassis response. This is a custom game simulation, not a full multibody solver: tyre deformation, deformable soil, chassis damage deformation and engineering-grade rollover dynamics are not simulated.
 
 The stadium's 3.8 m fences share the same segment definitions across rendering, walkers, exploration vehicles, the race host and guest prediction. Eighteen sloping bedrock shelves share their height with ground contact. Static arch geometry also contributes model-derived contact. Four nearby light sources are selected from 24 visible floodlight banks.
 
@@ -79,7 +81,7 @@ Character animation is procedural, including planted feet, terrain-aware knees, 
 
 Thrown samples use lunar gravity, substeps, spin, bounce, friction and impact dust. Stone bounds and some object contacts are conservative approximations. Suit hits cause a recoil pose, not an injury simulation. Footprints and dust are local effects.
 
-The host owns sample reservations, bags, missions, throws and hits. Shared sample state is sent at 10 Hz, with moving stones interpolated. The active loose field is bounded to 240 objects. Leaving a session releases an explorer's collected stones; joining or leaving starts a fresh local sampling session. Inventories are not persisted across reloads.
+The host owns sample reservations, bags, missions, throws and hits. Shared sample state is sent at 10 Hz, with moving stones interpolated. Surveys replenish clear loose-sample positions when needed; existing owned or reserved samples remain intact. Delivery is a host-validated 2.4-second action at the station receiving bench. Inventory is consumed once at placement; moving away before placement cancels without consuming it. The visible received pouches are bounded local session feedback, not persistent storage. The active loose field is bounded to 240 objects. Leaving a session releases an explorer's collected stones; joining or leaving starts a fresh local sampling session. Inventories are not persisted across reloads.
 
 ### Multiplayer
 

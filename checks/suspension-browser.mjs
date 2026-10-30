@@ -2,7 +2,7 @@ import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 await fs.mkdir('artifacts',{recursive:true});
-const browser=await chromium.launch({channel:'chrome',headless:true});
+const browser=await chromium.launch({channel:process.env.SELENE_BROWSER_CHANNEL||'chrome',headless:true});
 try{
   const page=await browser.newPage({viewport:{width:1200,height:800}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/src/main.js',r=>r.fulfill({contentType:'text/javascript',body:''}));
@@ -33,14 +33,21 @@ try{
       Object.assign(p,{y:1.5,grounded:false});for(let i=0;i<fps*3;i++)rover.update(p,1/fps);
       droop.push(rover.suspensionSnapshot().map(w=>w.hubY));
     }
+    const slopeContacts=[];
+    for(const [x,z] of [[0,0],[.25,0],[0,.3],[.25,-.3],[-.35,.2]])for(const steering of [0,.4]){
+      slopeX=x;slopeZ=z;Object.assign(p,{y:0,yaw:0,pitch:-Math.atan(z),roll:Math.atan(x),steering,grounded:true});
+      for(let i=0;i<240;i++)rover.update(p,1/60);
+      slopeContacts.push({x,z,steering,gaps:rover.suspensionSnapshot().map(w=>w.contactGap)});
+    }
     const camera=new THREE.PerspectiveCamera(40,innerWidth/innerHeight,.01,100);camera.position.set(4,1,5);camera.lookAt(0,.6,0);
     Object.assign(p,{y:.4,grounded:false,pitch:.34,roll:-.18,steering:.3});for(let i=0;i<180;i++)rover.update(p,1/60);
     const grid=new THREE.GridHelper(12,24,0x50616b,0x26353e);grid.position.y=-.3;scene.add(grid);renderer.render(scene,camera);
-    return {maxJointError,maxLengthError,minSpring,maxSpring,droop};
+    return {maxJointError,maxLengthError,minSpring,maxSpring,droop,slopeContacts};
   });
   await page.screenshot({path:'artifacts/articulated-suspension.png'});
   assert.ok(report.maxJointError<1e-6,'all wishbones remain attached to the knuckles');assert.ok(report.maxLengthError<1e-6,'rigid arms retain length');
   assert.ok(report.maxSpring-report.minSpring>.1,'coil spring extends and compresses');
   for(const pose of report.droop)for(const y of pose)assert.ok(Math.abs(y-.21)<.001,'airborne wheels settle at bounded droop');
+  for(const slope of report.slopeContacts)assert.ok(slope.gaps.every(g=>Math.abs(g)<.008),`steered tyre treads touch the slope: ${JSON.stringify(slope)}`);
   assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,...report},null,2));
 }finally{await browser.close();}
