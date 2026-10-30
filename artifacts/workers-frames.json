@@ -1,0 +1,145 @@
+{
+  "label": "workers",
+  "frames": 1187,
+  "p50": 16.700000000000728,
+  "p95": 33.599999999998545,
+  "p99": 33.89999999999782,
+  "max": 99.69999999999709,
+  "over100": 0,
+  "over250": 0,
+  "errors": [],
+  "state": {
+    "player": {
+      "x": 26.372389326964974,
+      "z": -49.51796962748606,
+      "y": 77.87793817597104,
+      "vx": 1.8140533321381171,
+      "vz": -4.842443689918096,
+      "vy": 0,
+      "yaw": -0.35,
+      "grounded": true,
+      "speed": 5.171078261046626,
+      "distance": 68.32137275368794,
+      "landed": false,
+      "landingSpeed": 0
+    },
+    "streaming": {
+      "terrainJobs": 3,
+      "terrainPending": true,
+      "rocks": {
+        "jobs": 2,
+        "pending": false
+      }
+    }
+  },
+  "cpu": [
+    {
+      "name": "(idle)",
+      "url": "",
+      "line": -1,
+      "count": 8291
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/landscape.js",
+      "line": 31,
+      "count": 790
+    },
+    {
+      "name": "(program)",
+      "url": "",
+      "line": -1,
+      "count": 591
+    },
+    {
+      "name": "resolveObstacles",
+      "url": "http://127.0.0.1:8000/src/world.js",
+      "line": 2,
+      "count": 239
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/landscape.js",
+      "line": 31,
+      "count": 194
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/landscape.js",
+      "line": 31,
+      "count": 182
+    },
+    {
+      "name": "updateCamera",
+      "url": "http://127.0.0.1:8000/src/main.js",
+      "line": 348,
+      "count": 155
+    },
+    {
+      "name": "WebGLRenderer.renderBufferDirect",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 29172,
+      "count": 138
+    },
+    {
+      "name": "copyArray",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 18318,
+      "count": 115
+    },
+    {
+      "name": "getParameters",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 20597,
+      "count": 91
+    },
+    {
+      "name": "uniformMatrix4fv",
+      "url": "",
+      "line": -1,
+      "count": 91
+    },
+    {
+      "name": "setProgram",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 30130,
+      "count": 83
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/landscape.js",
+      "line": 31,
+      "count": 81
+    },
+    {
+      "name": "bindVertexArray",
+      "url": "",
+      "line": -1,
+      "count": 78
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/landscape.js",
+      "line": 31,
+      "count": 77
+    },
+    {
+      "name": "getProgram",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 29984,
+      "count": 66
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/landscape.js",
+      "line": 31,
+      "count": 59
+    },
+    {
+      "name": "animate",
+      "url": "http://127.0.0.1:8000/src/main.js",
+      "line": 424,
+      "count": 58
+    }
+  ]
+}

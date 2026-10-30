@@ -1,0 +1,145 @@
+{
+  "label": "audio-hud",
+  "frames": 685,
+  "p50": 33.400000000001455,
+  "p95": 50.20000000000073,
+  "p99": 50.599999999998545,
+  "max": 133.1999999999971,
+  "over100": 1,
+  "over250": 0,
+  "errors": [],
+  "state": {
+    "player": {
+      "x": 29.458745511962515,
+      "z": -54.553487778403046,
+      "y": 76.32812844149046,
+      "vx": 1.770080790510756,
+      "vz": -3.7306946969951453,
+      "vy": 0,
+      "yaw": -0.35,
+      "grounded": true,
+      "speed": 4.129318215773989,
+      "distance": 73.05553752445442,
+      "landed": false,
+      "landingSpeed": 0
+    },
+    "streaming": {
+      "terrainJobs": 4,
+      "terrainPending": false,
+      "rocks": {
+        "jobs": 2,
+        "pending": false
+      }
+    }
+  },
+  "cpu": [
+    {
+      "name": "(idle)",
+      "url": "",
+      "line": -1,
+      "count": 8275
+    },
+    {
+      "name": "(program)",
+      "url": "",
+      "line": -1,
+      "count": 495
+    },
+    {
+      "name": "resolveObstacles",
+      "url": "http://127.0.0.1:8000/src/world.js",
+      "line": 2,
+      "count": 342
+    },
+    {
+      "name": "WebGLRenderer.renderBufferDirect",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 29172,
+      "count": 147
+    },
+    {
+      "name": "updateCamera",
+      "url": "http://127.0.0.1:8000/src/main.js",
+      "line": 409,
+      "count": 139
+    },
+    {
+      "name": "uniformMatrix4fv",
+      "url": "",
+      "line": -1,
+      "count": 131
+    },
+    {
+      "name": "bindVertexArray",
+      "url": "",
+      "line": -1,
+      "count": 125
+    },
+    {
+      "name": "copyArray",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 18318,
+      "count": 114
+    },
+    {
+      "name": "renderObject",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 22580,
+      "count": 107
+    },
+    {
+      "name": "getParameters",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 20597,
+      "count": 89
+    },
+    {
+      "name": "drawElements",
+      "url": "",
+      "line": -1,
+      "count": 85
+    },
+    {
+      "name": "bindVertexArray",
+      "url": "",
+      "line": -1,
+      "count": 84
+    },
+    {
+      "name": "gridHeight",
+      "url": "http://127.0.0.1:8000/src/landscape.js",
+      "line": 52,
+      "count": 83
+    },
+    {
+      "name": "animate",
+      "url": "http://127.0.0.1:8000/src/main.js",
+      "line": 486,
+      "count": 77
+    },
+    {
+      "name": "getProgram",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 29984,
+      "count": 77
+    },
+    {
+      "name": "renderObject",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 22580,
+      "count": 72
+    },
+    {
+      "name": "renderObject",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 29953,
+      "count": 68
+    },
+    {
+      "name": "setProgram",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 30130,
+      "count": 66
+    }
+  ]
+}

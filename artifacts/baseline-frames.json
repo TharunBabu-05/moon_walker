@@ -1,0 +1,137 @@
+{
+  "label": "baseline",
+  "frames": 965,
+  "p50": 16.799999999999272,
+  "p95": 34.599999999998545,
+  "p99": 66.69999999999709,
+  "max": 916.7000000000007,
+  "over100": 4,
+  "over250": 4,
+  "errors": [],
+  "state": {
+    "player": {
+      "x": 22.442901345986726,
+      "z": -38.9708985529447,
+      "y": 81.07876597142412,
+      "vx": 1.0022254932212933,
+      "vz": -2.658249178483553,
+      "vy": 0,
+      "yaw": -0.35,
+      "grounded": true,
+      "speed": 2.840905601066524,
+      "distance": 57.159469805235844,
+      "landed": false,
+      "landingSpeed": 0
+    }
+  },
+  "cpu": [
+    {
+      "name": "(idle)",
+      "url": "",
+      "line": -1,
+      "count": 7074
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/terrain.js",
+      "line": 32,
+      "count": 847
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/terrain.js",
+      "line": 32,
+      "count": 519
+    },
+    {
+      "name": "(program)",
+      "url": "",
+      "line": -1,
+      "count": 474
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/terrain.js",
+      "line": 32,
+      "count": 378
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/terrain.js",
+      "line": 32,
+      "count": 255
+    },
+    {
+      "name": "groundAt",
+      "url": "http://127.0.0.1:8000/src/rocks.js",
+      "line": 91,
+      "count": 236
+    },
+    {
+      "name": "resolveObstacles",
+      "url": "http://127.0.0.1:8000/src/world.js",
+      "line": 2,
+      "count": 208
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/terrain.js",
+      "line": 32,
+      "count": 176
+    },
+    {
+      "name": "updateCamera",
+      "url": "http://127.0.0.1:8000/src/main.js",
+      "line": 348,
+      "count": 141
+    },
+    {
+      "name": "WebGLRenderer.renderBufferDirect",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 29172,
+      "count": 133
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/terrain.js",
+      "line": 32,
+      "count": 110
+    },
+    {
+      "name": "copyArray",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 18318,
+      "count": 101
+    },
+    {
+      "name": "setProgram",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 30130,
+      "count": 89
+    },
+    {
+      "name": "groundAt",
+      "url": "http://127.0.0.1:8000/src/rocks.js",
+      "line": 91,
+      "count": 88
+    },
+    {
+      "name": "rawHeightAt",
+      "url": "http://127.0.0.1:8000/src/terrain.js",
+      "line": 32,
+      "count": 88
+    },
+    {
+      "name": "getParameters",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 20597,
+      "count": 87
+    },
+    {
+      "name": "uniformMatrix4fv",
+      "url": "",
+      "line": -1,
+      "count": 70
+    }
+  ]
+}

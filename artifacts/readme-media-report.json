@@ -1,0 +1,34 @@
+{
+  "images": 22,
+  "gifs": [
+    {
+      "file": "expedition-tour.gif",
+      "width": 560,
+      "frames": 147,
+      "seconds": 12.25,
+      "bytes": 2178511
+    },
+    {
+      "file": "moonwalk.gif",
+      "width": 560,
+      "frames": 106,
+      "seconds": 8.83,
+      "bytes": 1604642
+    },
+    {
+      "file": "buggy-drive.gif",
+      "width": 560,
+      "frames": 210,
+      "seconds": 17.5,
+      "bytes": 4978747
+    },
+    {
+      "file": "footprints.gif",
+      "width": 560,
+      "frames": 87,
+      "seconds": 7.25,
+      "bytes": 4153589
+    }
+  ],
+  "bytes": 14048957
+}

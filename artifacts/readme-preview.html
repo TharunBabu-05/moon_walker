@@ -1,0 +1,357 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="/"><title>SELENE README preview</title><style>
+*{box-sizing:border-box}body{margin:0;background:#0d1117;color:#e6edf3;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:980px;margin:auto;padding:40px;border:1px solid #30363d}h1{font-size:32px}h2{margin-top:32px;border-bottom:1px solid #30363d;padding-bottom:8px}h3{margin-top:24px}a{color:#58a6ff;text-decoration:none}img{max-width:100%;height:auto}table{border-collapse:collapse;width:100%;margin:16px 0;display:block;overflow-x:auto}th,td{border:1px solid #30363d;padding:8px 12px}td{vertical-align:top}tr:nth-child(2n){background:#161b22}pre,code{background:#161b22;border-radius:6px}pre{padding:16px;overflow-x:auto}code{font-size:85%;padding:2px 4px}pre code{padding:0}summary{cursor:pointer;padding:10px 0;color:#b8d9d6}hr{border:0;height:1px;background:#30363d;margin:32px 0}@media(max-width:600px){main{padding:18px 14px;border:0}body{font-size:14px}td,th{padding:6px}h1{font-size:28px}}
+</style></head><body><main><div align="center">
+
+<h1 id="selene">SELENE</h1>
+<h3 id="from-dust-to-orbit">From dust to orbit.</h3>
+<p><strong>A shared Moon expedition. A handful of regolith. A race under the stars.</strong></p>
+<p><a href="https://tharunbabu-05.github.io/moon_walker/"><strong>Play in your browser →</strong></a> · <a href="#explore-with-friends">Invite your crew</a> · <a href="#controls">Controls</a> · <a href="#run-locally">Run locally</a></p>
+<p><img src="docs/media/explorer.webp" alt="SELENE astronaut on the cratered lunar surface, with bootprints behind them"></p>
+<p><strong>3 camera views</strong> · <strong>Up to 8 explorers</strong> · <strong>2 suit designs</strong> · <strong>1 shared Moon</strong></p>
+</div>
+
+<p>SELENE is a 3D lunar exploration game built for the browser. Walk across cratered highlands, drive a suspended lunar buggy, collect rock and soil samples, and explore with friends. Visit a research outpost and historical flag exhibits, then head to a permanent stadium for a two-lap race across raw lunar terrain. Zoom out from the astronaut to the Moon and the Earth–Moon system.</p>
+<h2 id="see-it-in-motion">See it in motion</h2>
+<p>Looping GIFs converted from the project&#39;s four gameplay recordings. These captures span earlier builds; the feature guide below describes the current game.</p>
+<table>
+<thead>
+<tr>
+<th align="center">An expedition in miniature</th>
+<th align="center">Walking the highlands</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"><img src="docs/media/expedition-tour.gif" alt="Animated tour of the lunar surface, research outpost and astronaut"></td>
+<td align="center"><img src="docs/media/moonwalk.gif" alt="Animated astronaut walking and turning across the cratered highlands"></td>
+</tr>
+<tr>
+<td align="center">A camera tour from the outpost to the explorer.</td>
+<td align="center">Low-gravity movement seen from the follow camera.</td>
+</tr>
+</tbody></table>
+<table>
+<thead>
+<tr>
+<th align="center">Taking the buggy out</th>
+<th align="center">Leaving a trail</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"><img src="docs/media/buggy-drive.gif" alt="Animated lunar buggy drive followed by the astronaut exiting"></td>
+<td align="center"><img src="docs/media/footprints.gif" alt="Animated overhead view of an astronaut leaving bootprints in regolith"></td>
+</tr>
+<tr>
+<td align="center">Driving, changing camera angle and stepping out.</td>
+<td align="center">Bootprints record the path across the regolith.</td>
+</tr>
+</tbody></table>
+<p><strong>Explore the guide:</strong> <a href="#explore-the-moon">The Moon</a> · <a href="#drive-the-lunar-buggy">Buggy</a> · <a href="#collect-samples-and-aim-your-throws">Samples and throws</a> · <a href="#navigate-the-moon-and-its-history">Maps and flags</a> · <a href="#visit-the-research-outpost">Research station</a> · <a href="#race-at-crater-stadium">Stadium</a> · <a href="#explore-with-friends">Crew</a> · <a href="#make-the-expedition-yours">Suits and sound</a></p>
+<h2 id="explore-the-moon">Explore the Moon</h2>
+<p>Move from a visor-level view of the regolith to a follow camera around your astronaut, then pull back to the whole lunar globe. The surface features impact craters, sloping bedrock, detailed rocks, footprints, dust and long shadows. Walking, loping and jumping use lunar gravity of <strong>1.62 m/s²</strong>.</p>
+<table>
+<thead>
+<tr>
+<th align="center">On the surface</th>
+<th align="center">Above the Moon</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"><img src="docs/media/surface.webp" alt="Astronaut and detailed rocks on the generated lunar terrain"></td>
+<td align="center"><img src="docs/media/moon-orbit.webp" alt="Full lunar globe in the orbital camera"></td>
+</tr>
+<tr>
+<td align="center">Explore on foot with first-person and astronaut cameras.</td>
+<td align="center">Orbit the NASA-mapped Moon, then zoom out toward Earth.</td>
+</tr>
+</tbody></table>
+<p>The orbital Moon uses NASA LRO colour and elevation products. The walkable landscape is procedurally generated; it is not a surveyed reconstruction of an Apollo landing site. Close rocks use photographed Poly Haven models with colour, normal and roughness maps.</p>
+<details>
+<summary><strong>View the Earth–Moon system</strong></summary>
+
+<p><img src="docs/media/earth-moon.webp" alt="Moon and Earth viewed together at orbital scale"></p>
+<p>The orbital view uses mean body radii and mean Earth–Moon separation. At this scale the Moon is small beside Earth. Press <strong>3</strong> and scroll out to explore the system.</p>
+</details>
+
+<h2 id="drive-the-lunar-buggy">Drive the lunar buggy</h2>
+<p>Approach your buggy and press <strong>E</strong> to board. Drive in first person or orbit the camera around the vehicle. The astronaut grips the steering wheel, and stopping before exiting triggers the climb-out animation.</p>
+<table>
+<thead>
+<tr>
+<th align="center">A vehicle for the expedition</th>
+<th align="center">Connected suspension</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"><img src="docs/media/buggy-expedition.webp" alt="Player driving a lunar buggy across the highlands"></td>
+<td align="center"><img src="docs/media/suspension.webp" alt="Development view of the buggy with connected suspension arms and wheel assemblies"></td>
+</tr>
+<tr>
+<td align="center">Each crew member has their own exploration buggy.</td>
+<td align="center">Wishbones, steering knuckles, coil springs and telescoping dampers connect the wheels to the chassis.</td>
+</tr>
+</tbody></table>
+<p>Tyres respond to small bumps while low stones between the wheel tracks can pass beneath the chassis. Taller rocks block the vehicle. Ground contact, suspension travel, low traction and airborne lunar gravity shape the ride. These are tuned game physics, not a full engineering vehicle simulation.</p>
+<details>
+<summary><strong>Another view from the expedition</strong></summary>
+
+<p><img src="docs/media/buggy-headlights.webp" alt="Buggy casting a long shadow while driving toward illuminated lunar terrain"></p>
+</details>
+
+<h2 id="collect-samples-and-aim-your-throws">Collect samples and aim your throws</h2>
+<p>Find a loose, hand-sized stone and stop within reach. A gold ring marks the nearest collectible. The explorer turns, crouches, reaches and holds the specimen in the right glove. Large fixed boulders and decorative gravel stay in place.</p>
+<table>
+<thead>
+<tr>
+<th align="center">Rock collection</th>
+<th align="center">Soil collection</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"><img src="docs/media/rock-sample.webp" alt="Astronaut holding a small stone in the right glove"></td>
+<td align="center"><img src="docs/media/soil-sample.webp" alt="Astronaut crouching during the pocket-shovel soil sampling sequence"></td>
+</tr>
+<tr>
+<td align="center"><strong>F</strong> picks up a stone. <strong>B</strong> bags it. <strong>R</strong> retrieves it.</td>
+<td align="center"><strong>G</strong> draws the shovel, scoops regolith, pours it into the bag and stows the tool.</td>
+</tr>
+</tbody></table>
+<p>Each bag holds <strong>12 samples</strong>. Sampling preserves your follow-camera angle, so you can watch from the front or side. Stow a held stone before boarding a vehicle.</p>
+<p><img src="docs/media/throw-aim.webp" alt="First-person throw aiming with a predicted ballistic arc and landing marker"></p>
+<p><strong>Hold T to aim; release to throw.</strong> A temporary first-person view shows the predicted arc and landing point as throw power builds. After release, your previous camera view returns. <strong>Esc</strong> cancels aiming. Stones spin, bounce, slow on contact and produce impact dust; hitting another explorer triggers a short suit-recoil animation.</p>
+<p><strong>Field assignments:</strong> accept one of three sequential survey tasks, follow the gold marker and mini-map route, collect the required rocks and soil inside the survey circle, then return to the depot outside the research station to deliver them. The mission panel tracks your progress.</p>
+<h2 id="navigate-the-moon-and-its-history">Navigate the Moon and its history</h2>
+<p>Open <strong>ATLAS</strong>, press <strong>M</strong>, or click the mini-map. The surface map shows your position; click a destination to pin it and see a suggested route on the bottom-left mini-map. Pan, zoom or select <strong>Centre on me</strong> to return to your location.</p>
+<table>
+<thead>
+<tr>
+<th align="center">Plan your route</th>
+<th align="center">Explore real mission locations</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"><img src="docs/media/surface-map.webp" alt="Surface map with a route and destination controls"></td>
+<td align="center"><img src="docs/media/lunar-atlas.webp" alt="Lunar atlas showing named features and mission locations"></td>
+</tr>
+<tr>
+<td align="center">Local coordinates, waypoints and route guidance.</td>
+<td align="center">14 curated lunar features and landing sites, country filters and source links.</td>
+</tr>
+</tbody></table>
+<p><img src="docs/media/flags.webp" alt="Astronaut visiting the historical flag exhibits near the lunar research station"></p>
+<p><strong>Eight historical flag exhibits</strong> represent the six Apollo deployments and the Chang&#39;e 5 and 6 lander-mounted displays. Atlas entries connect their mission history to the local exhibit trail and to markers on the 3D Moon. The flags are labelled reconstructions; their nearby exhibit positions are not the real landing coordinates. Country labels identify exploration programs, not ownership of lunar terrain.</p>
+<h2 id="visit-the-research-outpost">Visit the research outpost</h2>
+<p>SELENE Research Outpost is the expedition&#39;s fictional surface station: a pressure-vessel-style habitat with a ramp, proximity airlocks, windows, equipment racks, a sample bench, interior lights, solar wings, radiator and communications dish.</p>
+<table>
+<thead>
+<tr>
+<th align="center">Arrive at the airlock</th>
+<th align="center">Step inside</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"><img src="docs/media/station-exterior.webp" alt="Research outpost entrance and access ramp"></td>
+<td align="center"><img src="docs/media/station-interior.webp" alt="Illuminated station interior with equipment racks and work areas"></td>
+</tr>
+</tbody></table>
+<p>Choose <strong>Visit research station</strong> in the atlas to reach the outpost. Doors respond to nearby explorers, and the white square on the mini-map marks the station. This is a concept habitat inspired by lunar infrastructure, not a real station currently operating on the Moon.</p>
+<h2 id="race-at-crater-stadium">Race at Crater Stadium</h2>
+<p><img src="docs/media/stadium-overview.webp" alt="Aerial view of the permanent circular stadium built into the lunar landscape"></p>
+<p><strong>A permanent stadium on the same Moon.</strong> Its entrance sits <strong>300 m east of the habitat centre</strong>, opening into a <strong>1.2 km-radius</strong> arena with 95 roofed grandstand sections, roughly 19,000 suited spectators and 24 floodlight towers.</p>
+<table>
+<thead>
+<tr>
+<th align="center">The course</th>
+<th align="center">The paddock</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"><img src="docs/media/stadium-track.webp" alt="Racing buggy beside the tall gold-and-white safety fences on the regolith course"></td>
+<td align="center"><img src="docs/media/stadium-cars.webp" alt="Exposed-frame race vehicles parked together in the stadium paddock"></td>
+</tr>
+<tr>
+<td align="center">Continuous <strong>3.8 m fences</strong> define both sides of the regolith track.</td>
+<td align="center"><strong>8 parked vehicles</strong>, with <strong>4 distinct designs</strong> to choose from.</td>
+</tr>
+</tbody></table>
+<p>Drive Rustwalker, six-wheel Iron Mule, roofed Dune Jackal or Red Prospector. The cars feature exposed frames, oversized wheels, visible suspension, roll cages, cargo and different finishes. The course crosses crater slopes, depressions, large bedrock shelves and rock arches. Amber warning rings announce falling boulders.</p>
+<h3 id="start-a-race-with-friends">Start a race with friends</h3>
+<ol>
+<li>Create or join a <strong>CREW</strong> expedition using an invite link or expedition code.</li>
+<li>Open <strong>STADIUM → Route to parked vehicles</strong> and travel to the paddock. Approach a free racer and press <strong>E</strong> within 6 m to board.</li>
+<li>Every seated driver presses <strong>Y</strong> or selects <strong>Ready</strong>. <strong>R</strong> remains the stone-retrieval key while on foot.</li>
+<li>With <strong>at least two ready drivers</strong>, the host selects <strong>Host: start race</strong>. Joining the crew alone does not start a race. Use <strong>Solo practice</strong> when playing alone.</li>
+<li>After the shared <strong>five-second countdown</strong>, pass <strong>16 checkpoints in order</strong> for <strong>two laps</strong>. The large <strong>START / FINISH</strong> gantry marks the lap line. Finish times appear in the race UI.</li>
+</ol>
+<p>Vehicle collisions and falling rocks cause damage. Destruction triggers recovery <strong>after four seconds at the destruction position</strong>, followed by two seconds of protection. This build is a checkpoint race with environmental hazards; it has no guns or AI opponents. Stop and press <strong>E</strong> to step out beside your car.</p>
+<details>
+<summary><strong>Look inside the grandstands</strong></summary>
+
+<p><img src="docs/media/stadium-crowd.webp" alt="Seated spacesuit spectators overlooking the lunar stadium"></p>
+<p>Crowds and stadium structures use instancing, with more detailed geometry near the camera. Four nearby floodlight sources illuminate the track at a time to limit rendering cost.</p>
+</details>
+
+<h2 id="explore-with-friends">Explore with friends</h2>
+<p><img src="docs/media/crew.webp" alt="Two explorers standing together between their personal lunar buggies"></p>
+<p><strong>Up to eight players can share an expedition. No account is required.</strong></p>
+<ol>
+<li>Open <a href="https://tharunbabu-05.github.io/moon_walker/">SELENE</a> and select <strong>Step onto the Moon</strong>.</li>
+<li>One player opens <strong>CREW</strong>, enters a callsign and selects <strong>Start an expedition</strong>.</li>
+<li>Select <strong>Copy invite</strong> and share the link, or share the eight-character expedition code.</li>
+<li>Friends open the link, enter their callsign and select <strong>Join crew</strong>. With a code, enter it in <strong>CREW</strong> instead.</li>
+</ol>
+<p>Explore together with callsigns, map markers, personal buggies, shared sampling and synchronized race vehicles. The host coordinates sample ownership, throws, hits, assignments and race state.</p>
+<p>Keep the <strong>host tab open and active</strong>. Everyone should refresh to the same version before creating a new invite. Sessions are temporary: there are no persistent accounts, saved inventories, public matchmaking or automatic host migration. Multiplayer uses PeerJS signalling and direct WebRTC connections; restrictive networks can prevent joining. GitHub Pages serves the game files rather than relaying player movement.</p>
+<h2 id="make-the-expedition-yours">Make the expedition yours</h2>
+<table>
+<thead>
+<tr>
+<th align="center">Costume 1</th>
+<th align="center">Costume 2</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"><img src="docs/media/costume-1.webp" alt="Front three-quarter model view of the original SELENE EVA suit"></td>
+<td align="center"><img src="docs/media/costume-2.webp" alt="Front three-quarter model view of the second padded EVA suit"></td>
+</tr>
+<tr>
+<td align="center">The original SELENE EVA outfit.</td>
+<td align="center">A padded suit with gold seals, layered boots and a detailed chest console.</td>
+</tr>
+</tbody></table>
+<p>These detail views render the actual game models in a studio setup. Press <strong>C</strong> to switch costumes; your crew sees the change. Your selection is saved on your device.</p>
+<p><strong>Sound:</strong> footsteps, landings, sampling, rock impacts, suit hits, vehicle entry, motor and rolling feedback, aiming tones and interface clicks. Open <strong>SOUND</strong> to adjust master volume, suit ambience and mute. Audio begins after entering the game and pauses when the tab loses focus. Outdoor effects are a cinematic suit feed, not sound travelling through a vacuum.</p>
+<p><strong>Your layout:</strong> collapse individual panel headings, hide the right-side stack with <strong>PANELS</strong>, or fold the top-right controls with <strong>TOOLS</strong>. Drag the mini-map by its header, resize it with <strong>− / +</strong>, and use <strong>RESET</strong> to restore its position. The layout adapts to the viewport, with local preferences saved on your device. <strong>H</strong> hides the interface for a clearer view.</p>
+<h2 id="controls">Controls</h2>
+<table>
+<thead>
+<tr>
+<th>Context</th>
+<th>Key / input</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>On foot</td>
+<td><strong>W A S D</strong> / arrows</td>
+<td>Walk relative to the camera</td>
+</tr>
+<tr>
+<td>On foot</td>
+<td><strong>Shift</strong> / <strong>Space</strong></td>
+<td>Lope / jump</td>
+</tr>
+<tr>
+<td>Camera</td>
+<td><strong>1 / 2 / 3</strong></td>
+<td>First person / astronaut / orbit</td>
+</tr>
+<tr>
+<td>Camera</td>
+<td><strong>V</strong>, drag, scroll</td>
+<td>Cycle view, look around, zoom</td>
+</tr>
+<tr>
+<td>Sampling</td>
+<td><strong>F / B / R / G</strong></td>
+<td>Pick stone / bag / retrieve / scoop soil</td>
+</tr>
+<tr>
+<td>Throwing</td>
+<td><strong>Hold T</strong>, release</td>
+<td>Charge and aim, then throw; <strong>Esc</strong> cancels</td>
+</tr>
+<tr>
+<td>Vehicle</td>
+<td><strong>E</strong></td>
+<td>Board nearby vehicle / exit after stopping</td>
+</tr>
+<tr>
+<td>Driving</td>
+<td><strong>W / S</strong>, <strong>A / D</strong>, <strong>Space</strong></td>
+<td>Drive/reverse, steer, brake</td>
+</tr>
+<tr>
+<td>Exploration buggy</td>
+<td><strong>Shift</strong></td>
+<td>Raise the speed limit</td>
+</tr>
+<tr>
+<td>Race lobby</td>
+<td><strong>Y</strong></td>
+<td>Toggle ready while seated in a racer</td>
+</tr>
+<tr>
+<td>Navigation</td>
+<td><strong>M</strong></td>
+<td>Open atlas and surface map</td>
+</tr>
+<tr>
+<td>Appearance</td>
+<td><strong>C</strong></td>
+<td>Change costume</td>
+</tr>
+<tr>
+<td>Interface</td>
+<td><strong>H / Esc</strong></td>
+<td>Hide interface / release mouse look</td>
+</tr>
+</tbody></table>
+<p>Touch controls include a walk pad, drag-to-look and pinch-to-zoom. Sampling actions also have on-screen buttons. For racing, keyboard controls are the documented driving interface.</p>
+<h2 id="run-locally">Run locally</h2>
+<p>The <a href="https://tharunbabu-05.github.io/moon_walker/">hosted game</a> needs no installation. For local development, install Node.js with npm, then:</p>
+<pre><code class="language-sh">git clone https://github.com/TharunBabu-05/moon_walker.git
+cd moon_walker
+npm install
+npm start
+</code></pre>
+<p>Open <strong><a href="http://localhost:8000">http://localhost:8000</a></strong>. On Windows, use <code>npm.cmd</code> if PowerShell blocks <code>npm.ps1</code>. Use the local server rather than opening <code>index.html</code> directly. Solo exploration works with the bundled assets; multiplayer needs internet access.</p>
+<h2 id="built-with">Built with</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Rendering</td>
+<td>Three.js, WebGL, GLTF models, instanced scenery and terrain detail levels</td>
+</tr>
+<tr>
+<td>Simulation</td>
+<td>Custom lunar locomotion, vehicle suspension, swept contact and ballistic samples</td>
+</tr>
+<tr>
+<td>Background work</td>
+<td>Web Workers for terrain chunks, rock fields, route planning and relief maps</td>
+</tr>
+<tr>
+<td>Multiplayer</td>
+<td>PeerJS + WebRTC, host authority, buffered remote motion and race client prediction</td>
+</tr>
+<tr>
+<td>Audio</td>
+<td>Web Audio, locally bundled Kenney effects and procedural suit/vehicle sounds</td>
+</tr>
+<tr>
+<td>Delivery</td>
+<td>Static HTML, CSS and JavaScript hosted on GitHub Pages</td>
+</tr>
+</tbody></table>
+<p><a href="docs/DEVELOPMENT.md">Development, testing and simulation notes →</a> · <a href="RESEARCH.md">Research notes →</a> · <a href=".github/workflows/pages.yml">Pages workflow →</a></p>
+<h2 id="credits-and-media">Credits and media</h2>
+<p>Built by <strong><a href="https://github.com/TharunBabu-05">Tharun Babu</a></strong>. Gameplay photos and videos supplied in <code>video_proof/</code>; supporting screenshots captured from the project. All four recordings are converted to silent GIFs. Some gallery images show earlier interface and suit revisions.</p>
+<ul>
+<li><strong>NASA SVS:</strong> orbital Moon colour and elevation products.</li>
+<li><strong>Poly Haven:</strong> photographed rock models and regolith material sources, CC0.</li>
+<li><strong>Kenney:</strong> impact and interface sound recordings, CC0.</li>
+<li><strong>Three.js / PeerJS:</strong> MIT-licensed libraries; bundled licence files are retained.</li>
+</ul>
+<p>See <a href="assets/ATTRIBUTION.md">full asset attribution</a>, <a href="assets/audio/README.md">audio credits</a>, and the <a href="docs/media/README.md">media sources and GIF conversion guide</a> for provenance and reproduction instructions. Third-party asset licences apply to their respective assets.</p>
+<hr>
+<div align="center">
+
+<p><strong>Leave footprints. Bring back samples. Meet your crew on the grid.</strong></p>
+<p><a href="https://tharunbabu-05.github.io/moon_walker/"><strong>Step onto the Moon →</strong></a></p>
+</div>
+</main></body></html>

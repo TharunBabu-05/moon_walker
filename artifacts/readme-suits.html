@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#0b1118}canvas{display:block}</style><script type="importmap">{"imports":{"three":"/vendor/three.module.js"}}</script></head><body><script type="module">
+import * as THREE from 'three';
+import { createAstronaut } from '/src/astronaut.js';
+import { createPlayer } from '/src/physics.js';
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x0b1118);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(720,720);renderer.setPixelRatio(1);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;document.body.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xe4f6ff,0x30343a,2));
+for(const [x,y,z,power] of [[-3,5,-4,3.2],[3,3,2,2.5]]){const l=new THREE.DirectionalLight(0xffffff,power);l.position.set(x,y,z);scene.add(l);}
+const grid=new THREE.GridHelper(10,20,0x263b47,0x15222a);grid.position.y=-.015;scene.add(grid);
+const camera=new THREE.PerspectiveCamera(35,1,.1,100);camera.position.set(1.6,1.55,-3.8);camera.lookAt(0,1.05,0);
+const avatar=createAstronaut(scene,()=>0,()=>{}),p=createPlayer(()=>0);
+for(let i=0;i<120;i++)avatar.update(p,1/60);
+window.setSuit=id=>{avatar.setCostume(id);renderer.render(scene,camera);};
+window.setSuit(1);
+</script></body></html>

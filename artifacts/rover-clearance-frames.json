@@ -1,0 +1,145 @@
+{
+  "label": "rover-clearance",
+  "frames": 774,
+  "p50": 33.30000000000291,
+  "p95": 50,
+  "p99": 50.599999999998545,
+  "max": 100.09999999999854,
+  "over100": 1,
+  "over250": 0,
+  "errors": [],
+  "state": {
+    "player": {
+      "x": 32.84033147259001,
+      "z": -71.1669834169466,
+      "y": 72.05491208731327,
+      "vx": 1.6381499834703985,
+      "vz": -4.5090794732876125,
+      "vy": 0,
+      "yaw": -0.35,
+      "grounded": true,
+      "speed": 4.797429839483613,
+      "distance": 92.38676008654649,
+      "landed": false,
+      "landingSpeed": 0
+    },
+    "streaming": {
+      "terrainJobs": 4,
+      "terrainPending": false,
+      "rocks": {
+        "jobs": 3,
+        "pending": false
+      }
+    }
+  },
+  "cpu": [
+    {
+      "name": "(idle)",
+      "url": "",
+      "line": -1,
+      "count": 5750
+    },
+    {
+      "name": "(program)",
+      "url": "",
+      "line": -1,
+      "count": 497
+    },
+    {
+      "name": "resolveObstacles",
+      "url": "http://127.0.0.1:8000/src/world.js",
+      "line": 2,
+      "count": 316
+    },
+    {
+      "name": "WebGLRenderer.renderBufferDirect",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 29172,
+      "count": 208
+    },
+    {
+      "name": "roverWheelHeight",
+      "url": "http://127.0.0.1:8000/src/world.js",
+      "line": 55,
+      "count": 174
+    },
+    {
+      "name": "bindVertexArray",
+      "url": "",
+      "line": -1,
+      "count": 146
+    },
+    {
+      "name": "updateCamera",
+      "url": "http://127.0.0.1:8000/src/main.js",
+      "line": 411,
+      "count": 135
+    },
+    {
+      "name": "uniformMatrix4fv",
+      "url": "",
+      "line": -1,
+      "count": 125
+    },
+    {
+      "name": "renderObject",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 22580,
+      "count": 103
+    },
+    {
+      "name": "renderObject",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 29953,
+      "count": 91
+    },
+    {
+      "name": "drawElements",
+      "url": "",
+      "line": -1,
+      "count": 91
+    },
+    {
+      "name": "getParameters",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 20597,
+      "count": 90
+    },
+    {
+      "name": "copyArray",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 18318,
+      "count": 86
+    },
+    {
+      "name": "setProgram",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 30130,
+      "count": 83
+    },
+    {
+      "name": "animate",
+      "url": "http://127.0.0.1:8000/src/main.js",
+      "line": 488,
+      "count": 77
+    },
+    {
+      "name": "setValueM4",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 18524,
+      "count": 70
+    },
+    {
+      "name": "WebGLRenderer.renderBufferDirect",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 29172,
+      "count": 66
+    },
+    {
+      "name": "getProgram",
+      "url": "http://127.0.0.1:8000/vendor/three.module.js",
+      "line": 29984,
+      "count": 63
+    }
+  ]
+}
