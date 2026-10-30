@@ -4,6 +4,10 @@
 
 This directory holds the self-contained images and animated GIFs displayed in the project README. The playable game does not load these files, and the Pages workflow excludes `docs/` from its deployment package.
 
+## Animated title
+
+[selene-header.svg](selene-header.svg) is an original, self-contained vector banner. It uses CSS animation for stars, an orbiting spacecraft, a moving rover and a radio pulse. It has no scripts, remote fonts or external image dependencies. Its title and scene remain visible when animation is disabled, and it respects `prefers-reduced-motion`. Edit the SVG directly; the raster media conversion script does not overwrite it.
+
 ## Sources
 
 All four videos supplied in `video_proof/` are converted at their full duration to silent, looping GIFs:

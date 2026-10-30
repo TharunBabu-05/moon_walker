@@ -1,8 +1,6 @@
 <div align="center">
 
-# SELENE
-
-### From dust to orbit.
+[![SELENE — From dust to orbit. Animated lunar expedition banner](docs/media/selene-header.svg)](https://tharunbabu-05.github.io/moon_walker/)
 
 **A shared Moon expedition. A handful of regolith. A race under the stars.**
 
@@ -215,6 +213,20 @@ Open **http://localhost:8000**. On Windows, use `npm.cmd` if PowerShell blocks `
 | Delivery | Static HTML, CSS and JavaScript hosted on GitHub Pages |
 
 [Development, testing and simulation notes →](docs/DEVELOPMENT.md) · [Research notes →](RESEARCH.md) · [Pages workflow →](.github/workflows/pages.yml)
+
+## Contributing
+
+Help improve the Moon with bug reports, performance fixes, accessible controls, documentation and appropriately licensed assets. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, verification and pull request guidance.
+
+## License
+
+SELENE is licensed under the **[GNU General Public License v3.0](LICENSE)**. When distributing covered software, preserve the licence notices and provide the corresponding source under the applicable GPL terms. Read the licence for the full conditions.
+
+Bundled libraries, models, textures and sounds retain their individual terms; see [asset attribution](assets/ATTRIBUTION.md) and the notices in `vendor/`.
+
+## Security
+
+Please report vulnerabilities through the private channel described in [SECURITY.md](SECURITY.md). The policy covers the current hosted game and `main`, including multiplayer input, dependencies and deployment concerns.
 
 ## Credits and media
 
